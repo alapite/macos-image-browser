@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import os
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
@@ -164,6 +166,27 @@ struct MainImageViewer: View {
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
     @State private var retryLoadTrigger = 0
+    @State private var lastLoggedImageLoadAt = Date.distantPast
+
+    private func loadImage(url: URL, context: String) -> NSImage? {
+        let start = DispatchTime.now()
+        let image = NSImage(contentsOf: url)
+        let elapsedNs = DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds
+        let elapsedMs = Double(elapsedNs) / 1_000_000.0
+
+        // Avoid spamming logs for repeated view updates.
+        if Date().timeIntervalSince(lastLoggedImageLoadAt) > 0.5 {
+            lastLoggedImageLoadAt = Date()
+
+            if image == nil {
+                Logger.imageLoad.error("Image decode failed context=\(context) file=\(url.lastPathComponent)")
+            } else {
+                Logger.imageLoad.info("Image decode context=\(context) file=\(url.lastPathComponent) elapsedMs=\(elapsedMs)")
+            }
+        }
+
+        return image
+    }
     
     var body: some View {
         ZStack {
@@ -187,7 +210,7 @@ struct MainImageViewer: View {
                 .padding()
             } else if let currentImage = appState.images[safe: appState.currentImageIndex] {
                 GeometryReader { geometry in
-                    if let nsImage = NSImage(contentsOf: currentImage.url) {
+                    if let nsImage = loadImage(url: currentImage.url, context: "main") {
                         Image(nsImage: nsImage)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
@@ -251,7 +274,7 @@ struct MainImageViewer: View {
                             .buttonStyle(.bordered)
                         }
                         .onChange(of: retryLoadTrigger) { _ in
-                            if NSImage(contentsOf: currentImage.url) != nil {
+                            if loadImage(url: currentImage.url, context: "main-retry") != nil {
                                 appState.failedImages.remove(currentImage.url)
                             }
                         }
@@ -313,9 +336,31 @@ struct MainImageViewer: View {
 struct ThumbnailView: View {
     let image: ImageFile
     let size: CGFloat
+
+    @State private var lastLoggedAt = Date.distantPast
+
+    private func loadThumbnail(url: URL) -> NSImage? {
+        let start = DispatchTime.now()
+        let image = NSImage(contentsOf: url)
+        let elapsedNs = DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds
+        let elapsedMs = Double(elapsedNs) / 1_000_000.0
+
+        // Thumbnails can be requested in large numbers; keep logging coarse.
+        if Date().timeIntervalSince(lastLoggedAt) > 3.0 {
+            lastLoggedAt = Date()
+
+            if image == nil {
+                Logger.imageLoad.error("Thumbnail decode failed file=\(url.lastPathComponent)")
+            } else {
+                Logger.imageLoad.info("Thumbnail decode file=\(url.lastPathComponent) elapsedMs=\(elapsedMs)")
+            }
+        }
+
+        return image
+    }
     
     var body: some View {
-        if let nsImage = NSImage(contentsOf: image.url) {
+        if let nsImage = loadThumbnail(url: image.url) {
             Image(nsImage: nsImage)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
