@@ -65,6 +65,9 @@ Each task was committed atomically:
 1. **Task 1: Add SwiftPM test target + test directory skeleton** - `7af6054` (test)
 2. **Task 2: Add core AppState unit tests (sorting + navigation + preferences encoding)** - `bcf059b` (test)
 
+**Plan metadata:** `f9e0b89` (docs)
+**Planning artifacts:** `8398587` (docs)
+
 ## Files Created/Modified
 
 - `Package.swift` - Adds `ImageBrowserTests` and tightens excludes so SwiftPM doesn’t treat non-source files as part of the executable target
@@ -79,7 +82,16 @@ Each task was committed atomically:
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
+### Auto-fixed Issues
+
+**1. [Rule 3 - Blocking] Committed untracked phase plan files**
+
+- **Found during:** Plan wrap-up (after Task 2)
+- **Issue:** `.planning/phases/01-baseline-test-harness/*-PLAN.md` files were untracked, which would make future plan execution/discovery inconsistent
+- **Fix:** Added the plan files to git so the repo contains the full planning prompt history
+- **Files modified:** `.planning/phases/01-baseline-test-harness/01-01-PLAN.md`, `.planning/phases/01-baseline-test-harness/01-02-PLAN.md`, `.planning/phases/01-baseline-test-harness/01-03-PLAN.md`
+- **Verification:** `git status` shows no remaining untracked plan files
+- **Commit:** 8398587
 
 ## Issues Encountered
 
