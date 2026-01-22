@@ -83,7 +83,7 @@ Phases execute in numeric order (1 -> 2 -> 3 -> 4 -> 5)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Baseline + Test Harness | 1/3 | In progress | - |
+| 1. Baseline + Test Harness | 2/3 | In progress | - |
 | 2. Async Folder Scanning + Progress | 0/2 | Not started | - |
 | 3. Thumbnail + Image Loading Pipeline | 0/3 | Not started | - |
 | 4. Reliability for Navigation + Slideshow | 0/2 | Not started | - |
