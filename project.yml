@@ -27,6 +27,7 @@ targets:
       - path: ImageBrowserApp.swift
       - path: AppState.swift
       - path: ContentView.swift
+      - path: Logging.swift
     resources:
       - path: Info.plist
     settings:

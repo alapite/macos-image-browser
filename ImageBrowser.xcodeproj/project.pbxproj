@@ -9,11 +9,13 @@
 /* Begin PBXBuildFile section */
 		7CA603E0291E32B5B0F47427 /* ImageBrowserApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E18AE468F70D6BB3A5B93B5 /* ImageBrowserApp.swift */; };
 		7D2C55EB6F0170C2650FF4B6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 799A657848E59C37F6F9AA81 /* ContentView.swift */; };
+		7EE7B52F5B25FADF5E6777BB /* Logging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 611DEA8B8E1204E6A6E8450A /* Logging.swift */; };
 		F2EC5C97C2ECEC23AD9FEB21 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9046A7C6C6CA769F54CEE04C /* AppState.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		3E18AE468F70D6BB3A5B93B5 /* ImageBrowserApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageBrowserApp.swift; sourceTree = "<group>"; };
+		611DEA8B8E1204E6A6E8450A /* Logging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logging.swift; sourceTree = "<group>"; };
 		799A657848E59C37F6F9AA81 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		9046A7C6C6CA769F54CEE04C /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		BF6AE1AB75DF1A8DF7F3EC32 /* ImageBrowser.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImageBrowser.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -34,6 +36,7 @@
 				9046A7C6C6CA769F54CEE04C /* AppState.swift */,
 				799A657848E59C37F6F9AA81 /* ContentView.swift */,
 				3E18AE468F70D6BB3A5B93B5 /* ImageBrowserApp.swift */,
+				611DEA8B8E1204E6A6E8450A /* Logging.swift */,
 				1D1165604E832599CE34434B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -99,6 +102,7 @@
 				F2EC5C97C2ECEC23AD9FEB21 /* AppState.swift in Sources */,
 				7D2C55EB6F0170C2650FF4B6 /* ContentView.swift in Sources */,
 				7CA603E0291E32B5B0F47427 /* ImageBrowserApp.swift in Sources */,
+				7EE7B52F5B25FADF5E6777BB /* Logging.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
