@@ -2,6 +2,89 @@ import Foundation
 import Combine
 import AppKit
 
+protocol PreferencesStore {
+    func load() -> Preferences?
+    func save(_ preferences: Preferences)
+}
+
+struct UserDefaultsPreferencesStore: PreferencesStore {
+    private let userDefaults: UserDefaults
+    private let key: String
+
+    init(
+        userDefaults: UserDefaults = .standard,
+        key: String = "ImageBrowserPreferences"
+    ) {
+        self.userDefaults = userDefaults
+        self.key = key
+    }
+
+    func load() -> Preferences? {
+        guard let data = userDefaults.data(forKey: key) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(Preferences.self, from: data)
+    }
+
+    func save(_ preferences: Preferences) {
+        guard let encoded = try? JSONEncoder().encode(preferences) else {
+            return
+        }
+        userDefaults.set(encoded, forKey: key)
+    }
+}
+
+protocol FileSystem {
+    func enumerateFiles(
+        in folder: URL,
+        includingPropertiesForKeys keys: [URLResourceKey]?,
+        options: FileManager.DirectoryEnumerationOptions
+    ) -> AnySequence<URL>
+
+    func creationDate(for fileURL: URL) throws -> Date
+    func fileExists(atPath path: String) -> Bool
+}
+
+struct DefaultFileSystem: FileSystem {
+    private let fileManager: FileManager
+
+    init(fileManager: FileManager = .default) {
+        self.fileManager = fileManager
+    }
+
+    func enumerateFiles(
+        in folder: URL,
+        includingPropertiesForKeys keys: [URLResourceKey]?,
+        options: FileManager.DirectoryEnumerationOptions
+    ) -> AnySequence<URL> {
+        AnySequence {
+            guard let enumerator = fileManager.enumerator(
+                at: folder,
+                includingPropertiesForKeys: keys,
+                options: options
+            ) else {
+                return AnyIterator<URL> { nil }
+            }
+
+            return AnyIterator {
+                enumerator.nextObject() as? URL
+            }
+        }
+    }
+
+    func creationDate(for fileURL: URL) throws -> Date {
+        let attributes = try fileManager.attributesOfItem(atPath: fileURL.path)
+        guard let creationDate = attributes[.creationDate] as? Date else {
+            throw CocoaError(.fileReadUnknown)
+        }
+        return creationDate
+    }
+
+    func fileExists(atPath path: String) -> Bool {
+        fileManager.fileExists(atPath: path)
+    }
+}
+
 class AppState: ObservableObject {
     @Published var images: [ImageFile] = []
     @Published var currentImageIndex: Int = 0
@@ -13,6 +96,9 @@ class AppState: ObservableObject {
     @Published var failedImages: Set<URL> = []
     
     private var slideshowTimer: Timer?
+
+    private let preferencesStore: any PreferencesStore
+    private let fileSystem: any FileSystem
     
     enum SortOrder: String, CaseIterable {
         case name = "Name"
@@ -20,7 +106,12 @@ class AppState: ObservableObject {
         case custom = "Custom Order"
     }
     
-    init() {
+    init(
+        preferencesStore: any PreferencesStore = UserDefaultsPreferencesStore(),
+        fileSystem: any FileSystem = DefaultFileSystem()
+    ) {
+        self.preferencesStore = preferencesStore
+        self.fileSystem = fileSystem
         loadPreferences()
     }
     
@@ -37,26 +128,28 @@ class AppState: ObservableObject {
         }
     }
     
-    private func loadImages(from url: URL) {
+    func loadImages(from url: URL) {
         failedImages.removeAll()
         var foundImages: [ImageFile] = []
-        
-        if let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.creationDateKey], options: [.skipsHiddenFiles]) {
-            while case let fileURL as URL = enumerator.nextObject() {
-                if isImageFile(fileURL) {
-                    do {
-                        let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
-                        if let creationDate = attributes[.creationDate] as? Date {
-                            let imageFile = ImageFile(
-                                url: fileURL,
-                                name: fileURL.lastPathComponent,
-                                creationDate: creationDate
-                            )
-                            foundImages.append(imageFile)
-                        }
-                    } catch {
-                        failedImages.insert(fileURL)
-                    }
+
+        let fileURLs = fileSystem.enumerateFiles(
+            in: url,
+            includingPropertiesForKeys: [.creationDateKey],
+            options: [.skipsHiddenFiles]
+        )
+
+        for fileURL in fileURLs {
+            if isImageFile(fileURL) {
+                do {
+                    let creationDate = try fileSystem.creationDate(for: fileURL)
+                    let imageFile = ImageFile(
+                        url: fileURL,
+                        name: fileURL.lastPathComponent,
+                        creationDate: creationDate
+                    )
+                    foundImages.append(imageFile)
+                } catch {
+                    failedImages.insert(fileURL)
                 }
             }
         }
@@ -176,15 +269,12 @@ class AppState: ObservableObject {
             customOrder: customOrder,
             lastFolder: selectedFolder?.path
         )
-        
-        if let encoded = try? JSONEncoder().encode(preferences) {
-            UserDefaults.standard.set(encoded, forKey: "ImageBrowserPreferences")
-        }
+
+        preferencesStore.save(preferences)
     }
     
     private func loadPreferences() {
-        guard let data = UserDefaults.standard.data(forKey: "ImageBrowserPreferences"),
-              let preferences = try? JSONDecoder().decode(Preferences.self, from: data) else {
+        guard let preferences = preferencesStore.load() else {
             return
         }
         
@@ -194,7 +284,7 @@ class AppState: ObservableObject {
         
         if let lastFolderPath = preferences.lastFolder {
             let lastFolderURL = URL(fileURLWithPath: lastFolderPath)
-            if FileManager.default.fileExists(atPath: lastFolderPath) {
+            if fileSystem.fileExists(atPath: lastFolderPath) {
                 selectedFolder = lastFolderURL
                 loadImages(from: lastFolderURL)
             }
