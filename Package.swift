@@ -23,16 +23,17 @@ let package = Package(
             dependencies: [],
             path: ".",
             exclude: [
-                "README.md", 
-                "Package.swift", 
-                "Info.plist", 
+                "README.md",
+                "Package.swift",
+                "Info.plist",
                 "build.sh",
                 "project.yml",
                 "ImageBrowser.xcodeproj",
-                "ImageBrowser.app",
                 ".build",
-                ".swiftpm",
-                "ANALYSIS_REPORT.md"
+                ".planning",
+                "Tests",
+                "AGENTS.md",
+                "LICENSE"
             ],
             sources: [
                 "ImageBrowserApp.swift",
@@ -42,6 +43,13 @@ let package = Package(
             resources: [
                 .process("Info.plist")
             ]
+        ),
+        .testTarget(
+            name: "ImageBrowserTests",
+            dependencies: [
+                "ImageBrowser"
+            ],
+            path: "Tests/ImageBrowserTests"
         ),
     ]
 )
