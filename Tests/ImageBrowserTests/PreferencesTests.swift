@@ -36,4 +36,23 @@ final class PreferencesTests: XCTestCase {
         XCTAssertEqual(decoded.sortOrder, "Name")
         XCTAssertEqual(decoded.customOrder, [])
     }
+
+    func testUserDefaultsPreferencesStoreRoundTripDoesNotTouchStandardDefaults() {
+        let userDefaults = makeIsolatedUserDefaults()
+        let store = UserDefaultsPreferencesStore(userDefaults: userDefaults)
+
+        XCTAssertNil(store.load())
+
+        let prefs = Preferences(
+            slideshowInterval: 2.0,
+            sortOrder: AppState.SortOrder.name.rawValue,
+            customOrder: [],
+            lastFolder: nil
+        )
+
+        store.save(prefs)
+
+        XCTAssertEqual(store.load()?.slideshowInterval, 2.0)
+        XCTAssertEqual(store.load()?.sortOrder, AppState.SortOrder.name.rawValue)
+    }
 }

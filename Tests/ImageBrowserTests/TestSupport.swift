@@ -31,3 +31,10 @@ func makeImageFile(
         creationDate: creationDate
     )
 }
+
+func makeIsolatedUserDefaults() -> UserDefaults {
+    let suiteName = "ImageBrowserTests.\(UUID().uuidString)"
+    let userDefaults = UserDefaults(suiteName: suiteName)!
+    userDefaults.removePersistentDomain(forName: suiteName)
+    return userDefaults
+}

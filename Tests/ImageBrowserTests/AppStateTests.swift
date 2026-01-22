@@ -3,7 +3,10 @@ import XCTest
 
 final class AppStateTests: XCTestCase {
     func testSortByNameIsLocalizedCaseInsensitive() {
-        let state = AppState()
+        let state = AppState(
+            preferencesStore: UserDefaultsPreferencesStore(userDefaults: makeIsolatedUserDefaults()),
+            fileSystem: DefaultFileSystem()
+        )
         state.sortOrder = .name
 
         var images = [
@@ -18,7 +21,10 @@ final class AppStateTests: XCTestCase {
     }
 
     func testSortByCreationDateIsAscending() {
-        let state = AppState()
+        let state = AppState(
+            preferencesStore: UserDefaultsPreferencesStore(userDefaults: makeIsolatedUserDefaults()),
+            fileSystem: DefaultFileSystem()
+        )
         state.sortOrder = .creationDate
 
         var images = [
@@ -33,7 +39,10 @@ final class AppStateTests: XCTestCase {
     }
 
     func testSortByCustomOrderRespectsKnownEntriesAndPushesUnknownToEnd() {
-        let state = AppState()
+        let state = AppState(
+            preferencesStore: UserDefaultsPreferencesStore(userDefaults: makeIsolatedUserDefaults()),
+            fileSystem: DefaultFileSystem()
+        )
         state.sortOrder = .custom
         state.customOrder = ["b.jpg", "a.jpg"]
 
@@ -49,7 +58,10 @@ final class AppStateTests: XCTestCase {
     }
 
     func testNavigateToNextWrapsFromLastToFirst() {
-        let state = AppState()
+        let state = AppState(
+            preferencesStore: UserDefaultsPreferencesStore(userDefaults: makeIsolatedUserDefaults()),
+            fileSystem: DefaultFileSystem()
+        )
         state.images = [
             makeImageFile(name: "a.jpg", creationDate: makeDate(year: 2020, month: 1, day: 1)),
             makeImageFile(name: "b.jpg", creationDate: makeDate(year: 2020, month: 1, day: 2)),
@@ -62,7 +74,10 @@ final class AppStateTests: XCTestCase {
     }
 
     func testNavigateToPreviousWrapsFromFirstToLast() {
-        let state = AppState()
+        let state = AppState(
+            preferencesStore: UserDefaultsPreferencesStore(userDefaults: makeIsolatedUserDefaults()),
+            fileSystem: DefaultFileSystem()
+        )
         state.images = [
             makeImageFile(name: "a.jpg", creationDate: makeDate(year: 2020, month: 1, day: 1)),
             makeImageFile(name: "b.jpg", creationDate: makeDate(year: 2020, month: 1, day: 2)),
@@ -75,7 +90,10 @@ final class AppStateTests: XCTestCase {
     }
 
     func testNavigateToIndexIgnoresOutOfRangeIndices() {
-        let state = AppState()
+        let state = AppState(
+            preferencesStore: UserDefaultsPreferencesStore(userDefaults: makeIsolatedUserDefaults()),
+            fileSystem: DefaultFileSystem()
+        )
         state.images = [
             makeImageFile(name: "a.jpg", creationDate: makeDate(year: 2020, month: 1, day: 1)),
             makeImageFile(name: "b.jpg", creationDate: makeDate(year: 2020, month: 1, day: 2)),
