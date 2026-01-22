@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import AppKit
+import os
 
 protocol PreferencesStore {
     func load() -> Preferences?
@@ -129,6 +130,20 @@ class AppState: ObservableObject {
     }
     
     func loadImages(from url: URL) {
+        let scanStart = DispatchTime.now()
+        let folderLabel = url.lastPathComponent
+
+        var signpostIntervalState: OSSignpostIntervalState?
+        if #available(macOS 12.0, *) {
+            let signpostID = Logging.scanSignposter.makeSignpostID()
+            signpostIntervalState = Logging.scanSignposter.beginInterval("FolderScan", id: signpostID)
+        }
+        defer {
+            if #available(macOS 12.0, *), let signpostIntervalState {
+                Logging.scanSignposter.endInterval("FolderScan", signpostIntervalState)
+            }
+        }
+
         failedImages.removeAll()
         var foundImages: [ImageFile] = []
 
@@ -153,6 +168,13 @@ class AppState: ObservableObject {
                 }
             }
         }
+
+        let scanElapsedNs = DispatchTime.now().uptimeNanoseconds - scanStart.uptimeNanoseconds
+        let scanElapsedMs = Double(scanElapsedNs) / 1_000_000.0
+
+        Logger.scan.info(
+            "Folder scan folder=\(folderLabel) images=\(foundImages.count) failures=\(self.failedImages.count) elapsedMs=\(scanElapsedMs)"
+        )
         
         sortImages(&foundImages)
         images = foundImages

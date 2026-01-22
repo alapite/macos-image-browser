@@ -38,7 +38,8 @@ let package = Package(
             sources: [
                 "ImageBrowserApp.swift",
                 "AppState.swift",
-                "ContentView.swift"
+                "ContentView.swift",
+                "Logging.swift"
             ],
             resources: [
                 .process("Info.plist")
