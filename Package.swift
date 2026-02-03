@@ -29,17 +29,17 @@ let package = Package(
                 "build.sh",
                 "project.yml",
                 "ImageBrowser.xcodeproj",
+                "ImageBrowser.app",
                 ".build",
-                ".planning",
-                "Tests",
-                "AGENTS.md",
-                "LICENSE"
+                ".swiftpm",
+                "ANALYSIS_REPORT.md",
+                "Tests"
             ],
             sources: [
                 "ImageBrowserApp.swift",
+                "AppDependencies.swift",
                 "AppState.swift",
-                "ContentView.swift",
-                "Logging.swift"
+                "ContentView.swift"
             ],
             resources: [
                 .process("Info.plist")
@@ -47,10 +47,11 @@ let package = Package(
         ),
         .testTarget(
             name: "ImageBrowserTests",
-            dependencies: [
-                "ImageBrowser"
-            ],
-            path: "Tests/ImageBrowserTests"
+            dependencies: ["ImageBrowser"],
+            path: "Tests",
+            resources: [
+                .process("Fixtures")
+            ]
         ),
     ]
 )

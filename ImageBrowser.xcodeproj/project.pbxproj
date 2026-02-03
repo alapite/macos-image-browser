@@ -9,16 +9,43 @@
 /* Begin PBXBuildFile section */
 		7CA603E0291E32B5B0F47427 /* ImageBrowserApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E18AE468F70D6BB3A5B93B5 /* ImageBrowserApp.swift */; };
 		7D2C55EB6F0170C2650FF4B6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 799A657848E59C37F6F9AA81 /* ContentView.swift */; };
-		7EE7B52F5B25FADF5E6777BB /* Logging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 611DEA8B8E1204E6A6E8450A /* Logging.swift */; };
+		85D6BC30B74F86F762306F7C /* AppStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A19F878EA331A44889C6E82 /* AppStateTests.swift */; };
+		945235624928B6193B7E7B1D /* ImageBrowserUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB2A0C7622E11BF4E74FB8F /* ImageBrowserUITests.swift */; };
+		CB2902069853A99C9700216C /* AppDependencies.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6D1D19FA949B708DB7D38C1 /* AppDependencies.swift */; };
+		EE03439B6D5A303F3970EF98 /* TestUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE379F0E7A4E752E73A2AA95 /* TestUtilities.swift */; };
+		EE57AFBCF8FDA56266FB52E9 /* FolderEnumerationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 027705B08F3A2A887699AB1D /* FolderEnumerationTests.swift */; };
 		F2EC5C97C2ECEC23AD9FEB21 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9046A7C6C6CA769F54CEE04C /* AppState.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		D5AA018922A6E971B714DF98 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6016C9F57270B0A3FD9F5F2C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 400D5A2D3D5195A4A6E00041;
+			remoteInfo = ImageBrowser;
+		};
+		D8B33C4B3B5A32332A786A4F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6016C9F57270B0A3FD9F5F2C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 400D5A2D3D5195A4A6E00041;
+			remoteInfo = ImageBrowser;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		027705B08F3A2A887699AB1D /* FolderEnumerationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderEnumerationTests.swift; sourceTree = "<group>"; };
 		3E18AE468F70D6BB3A5B93B5 /* ImageBrowserApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageBrowserApp.swift; sourceTree = "<group>"; };
-		611DEA8B8E1204E6A6E8450A /* Logging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logging.swift; sourceTree = "<group>"; };
+		462148C641D7B6C298B288CD /* ImageBrowserUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ImageBrowserUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6A19F878EA331A44889C6E82 /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
 		799A657848E59C37F6F9AA81 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		9046A7C6C6CA769F54CEE04C /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		A6D1D19FA949B708DB7D38C1 /* AppDependencies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDependencies.swift; sourceTree = "<group>"; };
+		AE379F0E7A4E752E73A2AA95 /* TestUtilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestUtilities.swift; sourceTree = "<group>"; };
+		BBB2A0C7622E11BF4E74FB8F /* ImageBrowserUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageBrowserUITests.swift; sourceTree = "<group>"; };
 		BF6AE1AB75DF1A8DF7F3EC32 /* ImageBrowser.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImageBrowser.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F5E1C9EB9FE65D961E8C1057 /* ImageBrowserTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ImageBrowserTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -26,17 +53,47 @@
 			isa = PBXGroup;
 			children = (
 				BF6AE1AB75DF1A8DF7F3EC32 /* ImageBrowser.app */,
+				F5E1C9EB9FE65D961E8C1057 /* ImageBrowserTests.xctest */,
+				462148C641D7B6C298B288CD /* ImageBrowserUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		E06E8A19B255CB8BCF39A453 /* UITests */ = {
+			isa = PBXGroup;
+			children = (
+				BBB2A0C7622E11BF4E74FB8F /* ImageBrowserUITests.swift */,
+			);
+			path = UITests;
+			sourceTree = "<group>";
+		};
+		E263E841AD1D0EA6CC7D984E /* ImageBrowserTests */ = {
+			isa = PBXGroup;
+			children = (
+				6A19F878EA331A44889C6E82 /* AppStateTests.swift */,
+				027705B08F3A2A887699AB1D /* FolderEnumerationTests.swift */,
+				AE379F0E7A4E752E73A2AA95 /* TestUtilities.swift */,
+			);
+			path = ImageBrowserTests;
+			sourceTree = "<group>";
+		};
+		EE2C9CC216820A1CAD55E5DF /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				E263E841AD1D0EA6CC7D984E /* ImageBrowserTests */,
+			);
+			path = Tests;
 			sourceTree = "<group>";
 		};
 		EE40BCCF66EEE04119A66D30 = {
 			isa = PBXGroup;
 			children = (
+				EE2C9CC216820A1CAD55E5DF /* Tests */,
+				E06E8A19B255CB8BCF39A453 /* UITests */,
+				A6D1D19FA949B708DB7D38C1 /* AppDependencies.swift */,
 				9046A7C6C6CA769F54CEE04C /* AppState.swift */,
 				799A657848E59C37F6F9AA81 /* ContentView.swift */,
 				3E18AE468F70D6BB3A5B93B5 /* ImageBrowserApp.swift */,
-				611DEA8B8E1204E6A6E8450A /* Logging.swift */,
 				1D1165604E832599CE34434B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -61,6 +118,42 @@
 			productReference = BF6AE1AB75DF1A8DF7F3EC32 /* ImageBrowser.app */;
 			productType = "com.apple.product-type.application";
 		};
+		4FAF1B194255FD2D56BCA9A7 /* ImageBrowserTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D1BC059447551BEB221BB964 /* Build configuration list for PBXNativeTarget "ImageBrowserTests" */;
+			buildPhases = (
+				EE17865D4E7FA706E2AC866F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				862655CAA5D4727861966D62 /* PBXTargetDependency */,
+			);
+			name = ImageBrowserTests;
+			packageProductDependencies = (
+			);
+			productName = ImageBrowserTests;
+			productReference = F5E1C9EB9FE65D961E8C1057 /* ImageBrowserTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		92D43A5CA0B4AB193BD34770 /* ImageBrowserUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 682C46D361B4F6F0232B53B8 /* Build configuration list for PBXNativeTarget "ImageBrowserUITests" */;
+			buildPhases = (
+				6D1E597B7973977EF3487464 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E616710753BDD228A2123A5C /* PBXTargetDependency */,
+			);
+			name = ImageBrowserUITests;
+			packageProductDependencies = (
+			);
+			productName = ImageBrowserUITests;
+			productReference = 462148C641D7B6C298B288CD /* ImageBrowserUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -72,6 +165,13 @@
 				TargetAttributes = {
 					400D5A2D3D5195A4A6E00041 = {
 						DevelopmentTeam = "";
+					};
+					4FAF1B194255FD2D56BCA9A7 = {
+						DevelopmentTeam = "";
+					};
+					92D43A5CA0B4AB193BD34770 = {
+						DevelopmentTeam = "";
+						TestTargetID = 400D5A2D3D5195A4A6E00041;
 					};
 				};
 			};
@@ -90,6 +190,8 @@
 			projectRoot = "";
 			targets = (
 				400D5A2D3D5195A4A6E00041 /* ImageBrowser */,
+				4FAF1B194255FD2D56BCA9A7 /* ImageBrowserTests */,
+				92D43A5CA0B4AB193BD34770 /* ImageBrowserUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -99,14 +201,45 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CB2902069853A99C9700216C /* AppDependencies.swift in Sources */,
 				F2EC5C97C2ECEC23AD9FEB21 /* AppState.swift in Sources */,
 				7D2C55EB6F0170C2650FF4B6 /* ContentView.swift in Sources */,
 				7CA603E0291E32B5B0F47427 /* ImageBrowserApp.swift in Sources */,
-				7EE7B52F5B25FADF5E6777BB /* Logging.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6D1E597B7973977EF3487464 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				945235624928B6193B7E7B1D /* ImageBrowserUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EE17865D4E7FA706E2AC866F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				85D6BC30B74F86F762306F7C /* AppStateTests.swift in Sources */,
+				EE57AFBCF8FDA56266FB52E9 /* FolderEnumerationTests.swift in Sources */,
+				EE03439B6D5A303F3970EF98 /* TestUtilities.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		862655CAA5D4727861966D62 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 400D5A2D3D5195A4A6E00041 /* ImageBrowser */;
+			targetProxy = D5AA018922A6E971B714DF98 /* PBXContainerItemProxy */;
+		};
+		E616710753BDD228A2123A5C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 400D5A2D3D5195A4A6E00041 /* ImageBrowser */;
+			targetProxy = D8B33C4B3B5A32332A786A4F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		03BECF49922C7D77C7609B9B /* Release */ = {
@@ -168,6 +301,57 @@
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		379DFF5A758F4F74D33FE2FB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.imagebrowser.ImageBrowserTests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ImageBrowser.app/Contents/MacOS/ImageBrowser";
+			};
+			name = Debug;
+		};
+		920FDCA90309CBE7EBBFCBF6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.imagebrowser.ImageBrowserUITests;
+				SDKROOT = macosx;
+				TEST_TARGET_NAME = ImageBrowser;
+			};
+			name = Debug;
+		};
+		AEC40460732238F7550CCBBB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.imagebrowser.ImageBrowserTests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ImageBrowser.app/Contents/MacOS/ImageBrowser";
 			};
 			name = Release;
 		};
@@ -240,6 +424,23 @@
 			};
 			name = Debug;
 		};
+		E1EC5E968EB56D551A800F79 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.imagebrowser.ImageBrowserUITests;
+				SDKROOT = macosx;
+				TEST_TARGET_NAME = ImageBrowser;
+			};
+			name = Release;
+		};
 		F6F3F09A10109653B2EA716A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -283,6 +484,24 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		682C46D361B4F6F0232B53B8 /* Build configuration list for PBXNativeTarget "ImageBrowserUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				920FDCA90309CBE7EBBFCBF6 /* Debug */,
+				E1EC5E968EB56D551A800F79 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D1BC059447551BEB221BB964 /* Build configuration list for PBXNativeTarget "ImageBrowserTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				379DFF5A758F4F74D33FE2FB /* Debug */,
+				AEC40460732238F7550CCBBB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		E6C4088F3734D12C30F10398 /* Build configuration list for PBXProject "ImageBrowser" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

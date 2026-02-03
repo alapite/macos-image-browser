@@ -44,9 +44,9 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "4FAF1B194255FD2D56BCA9A7"
-               BuildableName = "ImageBrowserTests.xctest"
-               BlueprintName = "ImageBrowserTests"
+               BlueprintIdentifier = "92D43A5CA0B4AB193BD34770"
+               BuildableName = "ImageBrowserUITests.xctest"
+               BlueprintName = "ImageBrowserUITests"
                ReferencedContainer = "container:ImageBrowser.xcodeproj">
             </BuildableReference>
          </TestableReference>

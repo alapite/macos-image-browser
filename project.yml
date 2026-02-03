@@ -25,9 +25,9 @@ targets:
     deploymentTarget: "13.0"
     sources:
       - path: ImageBrowserApp.swift
+      - path: AppDependencies.swift
       - path: AppState.swift
       - path: ContentView.swift
-      - path: Logging.swift
     resources:
       - path: Info.plist
     settings:
@@ -46,6 +46,24 @@ targets:
         SWIFT_EMIT_LOC_STRINGS: YES
     preBuildScripts: []
     postBuildScripts: []
+  ImageBrowserUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    deploymentTarget: "13.0"
+    sources:
+      - path: UITests
+    dependencies:
+      - target: ImageBrowser
+  ImageBrowserTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "13.0"
+    sources:
+      - path: Tests/ImageBrowserTests
+    resources:
+      - path: Tests/Fixtures
+    dependencies:
+      - target: ImageBrowser
 
 schemes:
   ImageBrowser:
@@ -55,6 +73,24 @@ schemes:
     run:
       config: Debug
     test:
+      config: Debug
+      targets:
+        - ImageBrowserTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+  ImageBrowserUITests:
+    build:
+      targets:
+        ImageBrowser: all
+    test:
+      config: Debug
+      targets:
+        - ImageBrowserUITests
+    run:
       config: Debug
     profile:
       config: Release
