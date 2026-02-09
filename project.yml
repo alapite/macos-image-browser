@@ -28,6 +28,7 @@ targets:
       - path: AppDependencies.swift
       - path: AppState.swift
       - path: ContentView.swift
+      - path: Assets.xcassets
     resources:
       - path: Info.plist
     settings:

@@ -42,7 +42,8 @@ let package = Package(
                 "ContentView.swift"
             ],
             resources: [
-                .process("Info.plist")
+                .process("Info.plist"),
+                .process("Assets.xcassets")
             ]
         ),
         .testTarget(
