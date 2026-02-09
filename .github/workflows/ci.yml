@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Swift build
+        run: swift build
+      - name: Swift test
+        run: swift test
+
+  xcode-app-build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Build app with xcodebuild
+        run: xcodebuild -project ImageBrowser.xcodeproj -scheme ImageBrowser -configuration Release -derivedDataPath build -destination "platform=macOS" build
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ImageBrowser-app
+          retention-days: 7
+          path: |
+            build/Build/Products/Release/ImageBrowser.app
+            build/Build/Products/Release/ImageBrowser.app.dSYM
