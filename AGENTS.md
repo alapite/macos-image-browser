@@ -1,147 +1,147 @@
 # Agent Instructions (macos-image-browser)
 
-This repo is a small SwiftUI macOS app. It can be built via Swift Package Manager (SPM) for fast iteration, or via `build.sh` which generates an Xcode project using XcodeGen and produces a signed `.app` bundle.
+This repository is a SwiftUI macOS image browser with:
+- Swift Package Manager support for fast local build/test cycles.
+- XcodeGen + `xcodebuild` support (via `build.sh`) for a signed `.app` bundle.
 
-Cursor/Copilot rules:
-- No `.cursorrules`, no `.cursor/rules/`, and no `.github/copilot-instructions.md` were found at time of writing.
+## Rules Files (Cursor / Copilot)
 
-## Quick Commands
+Checked in this repository:
+- No `.cursorrules` file found.
+- No `.cursor/rules/` directory found.
+- No `.github/copilot-instructions.md` file found.
 
-Prereqs:
+If any of these files are added later, agents should treat them as higher-priority local instructions.
+
+## Environment and Prerequisites
+
 - macOS 13+
-- Xcode installed (provides SDKs + `xcodebuild`)
-- Homebrew recommended (used to install XcodeGen in `build.sh`)
+- Xcode installed (for SDKs, `xcodebuild`, XCTest runtime)
+- Swift 5.9 toolchain (as declared in `Package.swift`)
+- Homebrew recommended (`build.sh` installs XcodeGen if missing)
 
-SPM (fast local build/run):
+## Build and Run Commands
+
+SwiftPM (fast iteration):
 - Build: `swift build`
-- Run (CLI executable): `swift run ImageBrowser`
+- Run executable: `swift run ImageBrowser`
 - Clean build artifacts: `rm -rf .build`
-- Package metadata: `swift package dump-package`
+- Inspect package graph: `swift package dump-package`
 
-XcodeGen + Xcode build (produces `.app`):
-- Build app bundle: `./build.sh`
-- Run app bundle: `open ImageBrowser.app`
-- Regenerate Xcode project: `xcodegen generate`
+XcodeGen / app bundle path:
+- Generate project: `xcodegen generate`
+- Build signed app bundle: `./build.sh`
+- Run built app: `open ImageBrowser.app`
 
-Direct `xcodebuild` (if `ImageBrowser.xcodeproj` exists):
-- Build: `xcodebuild -project ImageBrowser.xcodeproj -scheme ImageBrowser -configuration Release -destination "platform=macOS" build`
+Direct `xcodebuild` (when project exists):
+- `xcodebuild -project ImageBrowser.xcodeproj -scheme ImageBrowser -configuration Release -destination "platform=macOS" build`
 
-## Tests
+## Test Commands
 
 Current status:
-- No `Tests/` target exists; `swift test` reports "no tests found".
+- Unit tests exist under `Tests/ImageBrowserTests`.
+- CI currently runs `swift test` on macOS (`.github/workflows/ci.yml`).
 
-If/when tests are added (SwiftPM conventions):
+SwiftPM tests (primary path):
 - Run all tests: `swift test`
-- List tests: `swift test list`
-- Run a single test (preferred):
-  - `swift test --filter "<TestModule>.<TestCase>/<testMethod>"`
-  - Example: `swift test --filter "ImageBrowserTests.AppStateTests/testSortByName"`
-- Run all tests in a test case:
-  - `swift test --filter "<TestModule>.<TestCase>"`
-  - Example: `swift test --filter "ImageBrowserTests.AppStateTests"`
+- List all tests: `swift test list`
+- Run one test case: `swift test --filter "ImageBrowserTests.AppStateTests"`
+- Run one test method: `swift test --filter "ImageBrowserTests.AppStateTests/testSortByName_ordersAlphabetically"`
 
-Xcode test equivalents (once the scheme contains a test bundle):
-- All tests: `xcodebuild test -project ImageBrowser.xcodeproj -scheme ImageBrowser -destination "platform=macOS"`
-- Single test: `xcodebuild test -project ImageBrowser.xcodeproj -scheme ImageBrowser -destination "platform=macOS" -only-testing:<TestBundle>/<TestClass>/<testMethod>`
+Notes for `swift test` in this repo:
+- You may see package warnings about unhandled top-level files (for example `AGENTS.md` or `UITests`).
+- You may also see Swift 6 sendability warnings from `AppState.swift`.
+- These are warnings (not current test failures) unless treated as errors by a stricter toolchain.
 
-## Lint / Formatting
+Xcode test equivalents:
+- Run all tests in scheme: `xcodebuild test -project ImageBrowser.xcodeproj -scheme ImageBrowser -destination "platform=macOS"`
+- Run one test method: `xcodebuild test -project ImageBrowser.xcodeproj -scheme ImageBrowser -destination "platform=macOS" -only-testing:ImageBrowserTests/AppStateTests/testSortByName_ordersAlphabetically`
+- Run UI test scheme: `xcodebuild test -project ImageBrowser.xcodeproj -scheme ImageBrowserUITests -destination "platform=macOS"`
+
+## Lint and Formatting
 
 Current status:
-- No SwiftLint/SwiftFormat config found in the repo.
+- No enforced lint step in CI beyond compilation/test.
+- No repo-local `.swiftformat` or `.swiftlint.yml` config currently present.
 
-Recommended local tooling (optional; do not assume CI runs it):
-- SwiftFormat: `brew install swiftformat` then `swiftformat .`
-- SwiftLint: `brew install swiftlint` then `swiftlint`
+Optional local tools:
+- Format: `swiftformat .`
+- Lint: `swiftlint`
 
-If you introduce one of these tools, also add the config file (e.g. `.swiftformat` / `.swiftlint.yml`) and document new commands here.
+If you add lint/format tooling:
+- Commit config files with defaults appropriate to this codebase.
+- Update this document and CI workflow with exact commands.
 
 ## Project Layout
 
-- `ImageBrowserApp.swift`: SwiftUI `@main` entrypoint.
-- `ContentView.swift`: Root view + subviews.
-- `AppState.swift`: Shared state (`ObservableObject`), persistence, and file enumeration.
-- `project.yml`: XcodeGen spec.
-- `build.sh`: Generates Xcode project (if missing) and builds a signed `.app` bundle.
-- `Package.swift`: SPM definition (single executable target).
+- `ImageBrowserApp.swift`: `@main` entrypoint, window setup.
+- `ContentView.swift`: main UI, sidebar, viewer, settings sheets.
+- `AppState.swift`: source of truth for image list, navigation, sort, slideshow, caching, persistence.
+- `AppDependencies.swift`: protocols + adapters for filesystem and preferences (test seams).
+- `Tests/ImageBrowserTests/*.swift`: unit/integration-style tests for app state and enumeration.
+- `UITests/ImageBrowserUITests.swift`: UI test target source.
+- `Package.swift`: SwiftPM package + executable and test targets.
+- `project.yml`: XcodeGen project and scheme definitions.
+- `build.sh`: app bundle build/sign script.
 
-## Code Style (Swift)
+## Code Style Guidelines (Swift)
 
 General:
-- Prefer clarity over cleverness; keep app-state changes obvious.
-- Keep files small; extract subviews / helpers rather than growing a single view file indefinitely.
-- Prefer `struct` for models and views; use `class` only for reference semantics (e.g. `ObservableObject`).
+- Prefer straightforward, explicit code over abstractions that hide behavior.
+- Keep mutable app behavior in `AppState`; views should call intent methods.
+- Prefer extraction of focused helpers/subviews over growing large monolithic blocks.
 
 Imports:
-- One module per line.
-- Prefer a stable grouping order rather than random ordering.
-- Suggested order for this repo:
-  - UI files: `import SwiftUI` (only add others when needed)
-  - Non-UI files: `import Foundation`, then other frameworks (`Combine`, `AppKit`, etc.)
-- Avoid importing `AppKit` into SwiftUI views unless required.
+- One import per line.
+- Keep order stable and intention-revealing.
+- Preferred ordering in this repo:
+  - UI files: `SwiftUI` first, then platform frameworks only when needed.
+  - Non-UI files: `Foundation` first, then others (`Combine`, `AppKit`, `ImageIO`, `os`).
+- Do not add `AppKit` to SwiftUI files unless API needs it.
 
 Formatting:
-- Indent: 4 spaces.
-- Opening braces on the same line.
-- Use trailing commas for multi-line argument lists and collection literals.
-- Keep lines reasonably short (aim ~120 chars); wrap long SwiftUI modifier chains vertically.
-- Prefer explicit labels for readability (especially in initializers and view modifiers).
+- 4-space indentation; no tabs.
+- Braces on same line.
+- Favor trailing commas in multiline literals/argument lists.
+- Keep lines readable (target around 120 chars).
+- Wrap long SwiftUI modifier chains vertically.
 
 Types and access control:
-- Use the narrowest visibility that makes sense:
-  - `private` for file-internal helpers and state.
-  - `fileprivate` only when multiple types in the same file must share an implementation detail.
-- Prefer concrete types for state that crosses view boundaries.
-- When updating UI-related published state from async work, prefer `@MainActor` isolation or `await MainActor.run { ... }`.
+- `struct` by default; use `class` for shared mutable/reference semantics (`ObservableObject`, coordinators).
+- Use the narrowest access: prefer `private`, then `fileprivate` only when needed.
+- Keep protocols small and capability-based (see `FileSystemProviding`, `PreferencesStore`).
 
-Naming conventions:
-- Types/protocols/enums: `UpperCamelCase`.
-- Methods/vars: `lowerCamelCase`.
-- Boolean properties: `isEnabled`, `hasImages`, `shouldShow…`.
-- SwiftUI actions: `selectFolder()`, `navigateToNext()`, `toggleSlideshow()` (imperative verbs).
-- Avoid abbreviations unless domain-standard.
+State and concurrency:
+- UI-observed state should stay `@Published` on `AppState`.
+- When crossing async boundaries, update UI state on the main actor.
+- Cancel and replace long-running tasks when inputs change (pattern used for thumbnail prefetch).
+- Be mindful of sendability warnings when capturing Foundation/AppKit reference types in concurrent closures.
 
-SwiftUI patterns:
-- Keep `body` readable:
-  - Extract subviews into their own `View` structs.
-  - Extract computed properties for repeated modifier sets.
-- Prefer `@EnvironmentObject` only for truly shared app state; otherwise pass bindings/values.
-- Reset view-local state on key changes using `onChange(of:)` (as already done for zoom reset).
-
-State management:
-- `AppState` is the single source of truth for:
-  - `images`, `currentImageIndex`, sorting, slideshow state, preferences.
-- Keep mutations in `AppState` methods; views should call intent methods (do not mutate arrays directly in views).
-- When you add new state, also consider persistence (UserDefaults) only if it improves UX.
+Naming:
+- Types: `UpperCamelCase`.
+- Variables/functions/properties: `lowerCamelCase`.
+- Boolean names should read as predicates (`isLoadingImages`, `isSlideshowRunning`).
+- Action methods should use verbs (`loadImages`, `navigateToNext`, `updateCustomOrder`).
 
 Error handling and logging:
-- Do not silently swallow errors.
-- For recoverable failures (e.g. unreadable images), keep behavior user-friendly:
-  - Track failures (like `failedImages`) so UI can show a warning.
-  - Provide a retry path when reasonable.
-- For unexpected errors:
-  - Prefer `os.Logger` (or `print` as a last resort in this tiny repo).
-  - Include enough context (file URL, operation) to debug.
+- Do not silently ignore unexpected failures.
+- For recoverable issues (bad/corrupt image), track state for user-visible feedback (`failedImages`).
+- Prefer structured logging with `Logger`/`OSSignposter` (`Logging.swift`) over ad-hoc prints.
+- Include operation context (URL/path/action) in diagnostics.
 
 File and URL handling:
-- Use `URL` APIs over string paths.
-- Prefer `FileManager` enumerators with explicit options; avoid traversing hidden files.
-- Treat user-selected folders as untrusted input; validate extensions and existence.
+- Use `URL` and `FileManager` APIs, not string concatenation for paths.
+- Skip hidden files when enumerating folders unless behavior explicitly changes.
+- Validate user-selected paths/extensions before processing.
 
-## Making Changes Safely
+Testing expectations:
+- Add or update tests for behavior changes in sorting, navigation, slideshow, loading, or persistence.
+- Prefer focused XCTest methods with descriptive names and Given/When/Then comments.
+- Keep fixtures in `Tests/Fixtures` and shared helpers in `Tests/ImageBrowserTests/TestUtilities.swift`.
 
-- Preserve existing UX unless the task explicitly changes it.
-- If you refactor `AppState`, verify:
-  - sorting still preserves the current image when possible
-  - slideshow timer invalidates correctly
-  - preferences load without crashing when keys are missing
-- If you add tests:
-  - Create `Tests/ImageBrowserTests/` and a corresponding test target in `Package.swift`.
-  - Prefer unit tests for pure logic (sorting, preferences encoding/decoding).
-  - Avoid UI tests unless required.
+## Safety Checklist for Agents
 
-## Common Agent Tasks
-
-- Add a feature: implement logic in `AppState.swift` first, then wire UI in `ContentView.swift`.
-- Fix a bug: reproduce using `swift run ImageBrowser` (fast) or `./build.sh` (real `.app`).
-- Performance: avoid loading full-size images repeatedly; consider caching if needed.
+- Preserve existing UX unless change request says otherwise.
+- If editing `AppState`, re-check sorting stability, slideshow lifecycle, and preference load/save behavior.
+- Before finishing substantial work, run at least targeted tests (or `swift test` for broader changes).
+- If you introduce new build/test/lint commands, document them here immediately.
