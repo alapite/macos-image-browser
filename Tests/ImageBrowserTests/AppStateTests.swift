@@ -1,6 +1,8 @@
 import XCTest
+import Combine
 @testable import ImageBrowser
 
+@MainActor
 final class AppStateTests: XCTestCase {
     var sut: AppState!
     var preferencesStore: InMemoryPreferencesStore!
@@ -58,6 +60,13 @@ final class AppStateTests: XCTestCase {
                 name: name,
                 creationDate: creationDate
             )
+        }
+    }
+
+    private func createImageFiles(in directory: URL, names: [String]) {
+        for name in names {
+            let fileURL = directory.appendingPathComponent(name)
+            FileManager.default.createFile(atPath: fileURL.path, contents: Data([0x00]))
         }
     }
 
@@ -215,6 +224,56 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(sut.images.map { $0.name }, ["B.jpg", "A.jpg", "C.jpg"], "Should not change order with empty custom order")
     }
 
+    func testSortByCustom_withDuplicateFilenamesInDifferentFolders_usesURLKeys() {
+        // Given: Duplicate filenames in separate folders
+        let imageA = ImageFile(
+            url: URL(fileURLWithPath: "/tmp/folder-a/duplicate.jpg"),
+            name: "duplicate.jpg",
+            creationDate: Date(timeIntervalSince1970: 100)
+        )
+        let imageB = ImageFile(
+            url: URL(fileURLWithPath: "/tmp/folder-b/duplicate.jpg"),
+            name: "duplicate.jpg",
+            creationDate: Date(timeIntervalSince1970: 200)
+        )
+        let imageC = ImageFile(
+            url: URL(fileURLWithPath: "/tmp/folder-c/unique.jpg"),
+            name: "unique.jpg",
+            creationDate: Date(timeIntervalSince1970: 300)
+        )
+
+        sut.images = [imageA, imageB, imageC]
+        sut.customOrder = [imageB.url.standardizedFileURL.absoluteString, imageA.url.standardizedFileURL.absoluteString, imageC.url.standardizedFileURL.absoluteString]
+
+        // When: Sort by custom order
+        sut.sortOrder = .custom
+        sut.resortImages()
+
+        // Then: URLs follow explicit order even for duplicate names
+        XCTAssertEqual(
+            sut.images.map { $0.url.standardizedFileURL.absoluteString },
+            [imageB.url.standardizedFileURL.absoluteString, imageA.url.standardizedFileURL.absoluteString, imageC.url.standardizedFileURL.absoluteString],
+            "Custom sort should use URL-based keys to disambiguate duplicate filenames"
+        )
+    }
+
+    func testSortByCustom_withLegacyFilenameOrder_remainsBackwardCompatible() {
+        // Given: Legacy filename-only custom order and unique filenames
+        sut.customOrder = ["B.jpg", "A.jpg", "C.jpg"]
+        sut.images = [
+            ImageFile(url: URL(fileURLWithPath: "/tmp/a/A.jpg"), name: "A.jpg", creationDate: Date(timeIntervalSince1970: 100)),
+            ImageFile(url: URL(fileURLWithPath: "/tmp/b/B.jpg"), name: "B.jpg", creationDate: Date(timeIntervalSince1970: 200)),
+            ImageFile(url: URL(fileURLWithPath: "/tmp/c/C.jpg"), name: "C.jpg", creationDate: Date(timeIntervalSince1970: 300))
+        ]
+
+        // When: Sort by custom order
+        sut.sortOrder = .custom
+        sut.resortImages()
+
+        // Then: Legacy saved order still applies
+        XCTAssertEqual(sut.images.map { $0.name }, ["B.jpg", "A.jpg", "C.jpg"], "Legacy filename-based custom order should keep working")
+    }
+
     func testResortImages_preservesCurrentImage() {
         // Given: Images and current image at index 2
         let images = createNamedImages(names: ["C.jpg", "B.jpg", "A.jpg", "D.jpg"])
@@ -228,6 +287,24 @@ final class AppStateTests: XCTestCase {
         // Then: Current index points to same image (now at different index)
         let currentImageName = sut.images[sut.currentImageIndex].name
         XCTAssertEqual(currentImageName, "A.jpg", "Should preserve current image after resort")
+    }
+
+    func testImageFileID_isStableForSameURL() {
+        // Given: Two ImageFile values representing the same URL
+        let sharedURL = URL(fileURLWithPath: "/tmp/stable-id.jpg")
+        let first = ImageFile(
+            url: sharedURL,
+            name: "stable-id.jpg",
+            creationDate: Date(timeIntervalSince1970: 100)
+        )
+        let second = ImageFile(
+            url: sharedURL,
+            name: "stable-id.jpg",
+            creationDate: Date(timeIntervalSince1970: 200)
+        )
+
+        // Then: Identity key is stable and URL-derived
+        XCTAssertEqual(first.id, second.id, "Image identity should be stable for the same URL")
     }
 
     // MARK: - Slideshow Tests
@@ -318,12 +395,47 @@ final class AppStateTests: XCTestCase {
         XCTAssertFalse(sut.isSlideshowRunning, "Slideshow should remain stopped")
     }
 
+    func testSetSortOrder_resortsImagesAndPersistsPreference() {
+        // Given: Images in non-alphabetical order
+        sut.images = createNamedImages(names: ["C.jpg", "A.jpg", "B.jpg"])
+
+        // When: Set sort order through intent method
+        sut.setSortOrder(.name)
+
+        // Then: Images are resorted and preference is persisted
+        XCTAssertEqual(sut.images.map { $0.name }, ["A.jpg", "B.jpg", "C.jpg"], "setSortOrder should trigger resort behavior")
+
+        let data = preferencesStore.data(forKey: "ImageBrowserPreferences")
+        XCTAssertNotNil(data, "setSortOrder should persist preferences")
+
+        let savedPreferences = data.flatMap { try? JSONDecoder().decode(Preferences.self, from: $0) }
+        XCTAssertEqual(savedPreferences?.sortOrder, AppState.SortOrder.name.rawValue, "Saved sort order should match selected value")
+    }
+
+    func testUpdateSlideshowInterval_persistsPreference() {
+        // Given: Existing interval value
+        XCTAssertEqual(sut.slideshowInterval, 3.0, "Default interval should start at 3.0")
+
+        // When: Update interval through intent method
+        sut.updateSlideshowInterval(6.5)
+
+        // Then: Interval is updated and preference is persisted
+        XCTAssertEqual(sut.slideshowInterval, 6.5, "updateSlideshowInterval should update interval")
+
+        let data = preferencesStore.data(forKey: "ImageBrowserPreferences")
+        XCTAssertNotNil(data, "updateSlideshowInterval should persist preferences")
+
+        let savedPreferences = data.flatMap { try? JSONDecoder().decode(Preferences.self, from: $0) }
+        XCTAssertNotNil(savedPreferences, "Preferences should decode successfully")
+        XCTAssertEqual(savedPreferences?.slideshowInterval ?? 0, 6.5, accuracy: 0.001, "Saved interval should match updated value")
+    }
+
     // MARK: - Preference Tests
 
     func testSavePreferences_writesToPreferencesStore() {
         // Given: Specific preference values
-        sut.slideshowInterval = 5.0
-        sut.sortOrder = .creationDate
+        sut.updateSlideshowInterval(5.0)
+        sut.setSortOrder(.creationDate)
         sut.customOrder = ["B.jpg", "A.jpg"]
 
         // When: Save preferences
@@ -478,5 +590,183 @@ final class AppStateTests: XCTestCase {
         let corruptedURL = copyFixture(resource: "corrupted", ext: "bin", to: tempDir)
         let image = await sut.loadDownsampledImage(from: corruptedURL, maxPixelSize: 64, cache: .main)
         XCTAssertNil(image, "Downsampled image should be nil for corrupted file")
+    }
+
+    func testLoadImages_publishesLoadingBoundariesOnMainActor() async {
+        let tempDir = makeTempDirectory()
+        _ = copyFixture(resource: "one-pixel", ext: "png", to: tempDir)
+
+        let loadingExpectation = expectation(description: "loading state updates")
+        loadingExpectation.expectedFulfillmentCount = 2
+        let completionExpectation = expectation(description: "images update")
+
+        var loadingTransitions: [Bool] = []
+        let loadingCancellable = sut.$isLoadingImages
+            .dropFirst()
+            .sink { isLoading in
+                XCTAssertTrue(Thread.isMainThread, "isLoadingImages should publish on the main thread")
+                loadingTransitions.append(isLoading)
+                loadingExpectation.fulfill()
+            }
+
+        let imagesCancellable = sut.$images
+            .dropFirst()
+            .sink { images in
+                XCTAssertTrue(Thread.isMainThread, "images should publish on the main thread")
+                XCTAssertFalse(images.isEmpty, "Image scan should publish discovered images")
+                completionExpectation.fulfill()
+            }
+
+        sut.loadImages(from: tempDir)
+        await fulfillment(of: [loadingExpectation, completionExpectation], timeout: 2.0)
+
+        XCTAssertEqual(loadingTransitions, [true, false], "loadImages should toggle loading state around async work")
+        withExtendedLifetime((loadingCancellable, imagesCancellable)) {}
+    }
+
+    func testLoadImages_setsSelectedFolderAndPersistsLastFolder() async {
+        let tempDir = makeTempDirectory()
+        _ = copyFixture(resource: "one-pixel", ext: "png", to: tempDir)
+
+        let imagesLoaded = expectation(description: "images loaded")
+        let cancellable = sut.$images
+            .dropFirst()
+            .sink { images in
+                if !images.isEmpty {
+                    imagesLoaded.fulfill()
+                }
+            }
+
+        sut.loadImages(from: tempDir)
+        await fulfillment(of: [imagesLoaded], timeout: 2.0)
+
+        XCTAssertEqual(
+            sut.selectedFolder?.standardizedFileURL,
+            tempDir.standardizedFileURL,
+            "loadImages should track selected folder without requiring a separate folder-selection API"
+        )
+
+        let data = preferencesStore.data(forKey: "ImageBrowserPreferences")
+        XCTAssertNotNil(data, "loadImages should persist preferences")
+
+        let savedPreferences = data.flatMap { try? JSONDecoder().decode(Preferences.self, from: $0) }
+        XCTAssertEqual(savedPreferences?.lastFolder, tempDir.path, "loadImages should persist last loaded folder path")
+        withExtendedLifetime(cancellable) {}
+    }
+
+    func testPrefetchMainImages_whenIndexContextChanges_cancelsReplacedWork() async {
+        let pipeline = RecordingDownsamplingPipeline(delayNanoseconds: 200_000_000)
+        let appState = AppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
+        appState.images = createNamedImages(names: ["0.jpg", "1.jpg", "2.jpg", "3.jpg", "4.jpg"])
+
+        appState.prefetchMainImages(around: 2, maxPixelSize: 64)
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        appState.prefetchMainImages(around: 1, maxPixelSize: 64)
+
+        try? await Task.sleep(nanoseconds: 700_000_000)
+        let requestedURLs = await pipeline.recordedURLs()
+
+        XCTAssertTrue(
+            requestedURLs.contains(appState.images[1].url),
+            "Initial prefetch should begin before replacement"
+        )
+        XCTAssertFalse(
+            requestedURLs.contains(appState.images[3].url),
+            "Old main-image prefetch should be canceled before loading the second outdated neighbor"
+        )
+        XCTAssertTrue(
+            requestedURLs.contains(appState.images[0].url) || requestedURLs.contains(appState.images[2].url),
+            "Replacement prefetch should load neighbors for the latest index context"
+        )
+    }
+
+    func testThumbnailPrefetch_whenFolderChanges_cancelsOldFolderWork() async {
+        let pipeline = RecordingDownsamplingPipeline(delayNanoseconds: 220_000_000)
+        let appState = AppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
+        appState.updateThumbnailPrefetchSize(64)
+
+        let folderA = makeTempDirectory()
+        let folderB = makeTempDirectory()
+        createImageFiles(in: folderA, names: ["A1.jpg", "A2.jpg", "A3.jpg"])
+        createImageFiles(in: folderB, names: ["B1.jpg", "B2.jpg"])
+
+        appState.loadImages(from: folderA)
+        _ = await pipeline.waitForFirstRequest(in: folderA, timeoutNanoseconds: 1_000_000_000)
+        appState.loadImages(from: folderB)
+
+        try? await Task.sleep(nanoseconds: 900_000_000)
+        let requestedURLs = await pipeline.recordedURLs()
+        let requestedPaths = requestedURLs.map { $0.standardizedFileURL.path }
+
+        XCTAssertFalse(
+            requestedPaths.contains(folderA.appendingPathComponent("A2.jpg").standardizedFileURL.path),
+            "Old thumbnail prefetch should be canceled when switching folders"
+        )
+        XCTAssertTrue(
+            requestedPaths.contains(where: { $0.hasPrefix(folderB.standardizedFileURL.path) }),
+            "New folder context should trigger replacement thumbnail prefetch"
+        )
+    }
+
+    func testThumbnailPrefetch_whenNavigating_doesNotInvalidateThumbnailContext() async {
+        let pipeline = RecordingDownsamplingPipeline(delayNanoseconds: 8_000_000)
+        let appState = AppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
+        appState.updateThumbnailPrefetchSize(64)
+
+        let folder = makeTempDirectory()
+        let imageNames = (0..<60).map { String(format: "N%02d.jpg", $0) }
+        createImageFiles(in: folder, names: imageNames)
+
+        appState.loadImages(from: folder)
+        _ = await pipeline.waitForFirstRequest(in: folder, timeoutNanoseconds: 1_000_000_000)
+
+        appState.navigateToNext()
+
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        let thumbnailPaths = await pipeline.recordedPaths(for: .thumbnail)
+
+        XCTAssertTrue(
+            thumbnailPaths.contains(folder.appendingPathComponent("N55.jpg").standardizedFileURL.path),
+            "Navigation should not invalidate thumbnail prefetch context"
+        )
+    }
+}
+
+actor RecordingDownsamplingPipeline: ImageDownsamplingProviding {
+    private var requests: [(url: URL, cache: DownsamplingCacheKind)] = []
+    private let delayNanoseconds: UInt64
+
+    init(delayNanoseconds: UInt64) {
+        self.delayNanoseconds = delayNanoseconds
+    }
+
+    func loadImage(from url: URL, maxPixelSize: Int, cache: DownsamplingCacheKind) async -> CGImage? {
+        requests.append((url: url, cache: cache))
+        try? await Task.sleep(nanoseconds: delayNanoseconds)
+        return nil
+    }
+
+    func recordedURLs() -> [URL] {
+        requests.map(\.url)
+    }
+
+    func recordedPaths(for cache: DownsamplingCacheKind) -> [String] {
+        requests
+            .filter { $0.cache == cache }
+            .map { $0.url.standardizedFileURL.path }
+    }
+
+    func waitForFirstRequest(in directory: URL, timeoutNanoseconds: UInt64) async -> Bool {
+        let pollInterval: UInt64 = 20_000_000
+        var waited: UInt64 = 0
+        let directoryPath = directory.standardizedFileURL.path
+        while waited < timeoutNanoseconds {
+            if requests.contains(where: { $0.url.standardizedFileURL.path.hasPrefix(directoryPath) }) {
+                return true
+            }
+            try? await Task.sleep(nanoseconds: pollInterval)
+            waited += pollInterval
+        }
+        return false
     }
 }

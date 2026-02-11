@@ -21,28 +21,8 @@ let package = Package(
         .executableTarget(
             name: "ImageBrowser",
             dependencies: [],
-            path: ".",
-            exclude: [
-                "README.md",
-                "Package.swift",
-                "Info.plist",
-                "build.sh",
-                "project.yml",
-                "ImageBrowser.xcodeproj",
-                "ImageBrowser.app",
-                ".build",
-                ".swiftpm",
-                "ANALYSIS_REPORT.md",
-                "Tests"
-            ],
-            sources: [
-                "ImageBrowserApp.swift",
-                "AppDependencies.swift",
-                "AppState.swift",
-                "ContentView.swift"
-            ],
+            exclude: ["Info.plist"],
             resources: [
-                .process("Info.plist"),
                 .process("Assets.xcassets")
             ]
         ),

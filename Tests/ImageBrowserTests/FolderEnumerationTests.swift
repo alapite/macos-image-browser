@@ -1,6 +1,7 @@
 import XCTest
 @testable import ImageBrowser
 
+@MainActor
 final class FolderEnumerationTests: XCTestCase {
     func testLoadImages_enumeratesSupportedImagesSkippingHiddenAndNonImages() async {
         let preferencesStore = InMemoryPreferencesStore()

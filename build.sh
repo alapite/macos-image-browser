@@ -3,7 +3,7 @@
 # Build script to create a macOS .app bundle from Swift source files
 # Uses XcodeGen for project generation and xcodebuild for compilation
 
-set -e
+set -euo pipefail
 
 APP_NAME="ImageBrowser"
 XCODEPROJ="${APP_NAME}.xcodeproj"
@@ -12,8 +12,27 @@ CONTENTS_DIR="${APP_BUNDLE}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
 RESOURCES_DIR="${CONTENTS_DIR}/Resources"
 BUILD_DIR=".build"
+XCODEBUILD_LOG="${BUILD_DIR}/xcodebuild.log"
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+
+if [ "${SIGN_IDENTITY}" = "-" ]; then
+    SIGNING_MODE="ad-hoc"
+else
+    SIGNING_MODE="developer-id"
+fi
 
 echo "Building ${APP_NAME}..."
+echo "Signing mode: ${SIGNING_MODE}"
+
+if [ "${SIGNING_MODE}" = "developer-id" ]; then
+    if ! security find-identity -v -p codesigning | grep -F "${SIGN_IDENTITY}" > /dev/null; then
+        echo "❌ Error: Requested SIGN_IDENTITY not found in keychain"
+        echo "   SIGN_IDENTITY=${SIGN_IDENTITY}"
+        echo "   Available identities:"
+        security find-identity -v -p codesigning || true
+        exit 1
+    fi
+fi
 
 # Check for XcodeGen
 if ! command -v xcodegen &> /dev/null; then
@@ -26,15 +45,14 @@ echo "Cleaning previous builds..."
 rm -rf "${APP_BUNDLE}"
 rm -rf "${BUILD_DIR}"
 
-# Generate Xcode project if needed
-if [ ! -d "${XCODEPROJ}" ]; then
-    echo "Generating Xcode project..."
-    xcodegen generate
-fi
+# Regenerate Xcode project from spec on every run so path/config changes are picked up
+echo "Generating Xcode project..."
+xcodegen generate --spec project.yml
 
 # Build the project for both architectures using xcodebuild
 echo "Building Xcode project (x86_64 + arm64)..."
-xcodebuild \
+mkdir -p "${BUILD_DIR}"
+if xcodebuild \
     -project "${XCODEPROJ}" \
     -scheme "${APP_NAME}" \
     -configuration Release \
@@ -46,7 +64,14 @@ xcodebuild \
     CODE_SIGNING_ALLOWED=NO \
     ARCHS="x86_64 arm64" \
     VALID_ARCHS="x86_64 arm64" \
-    2>&1 | tail -20
+    > "${XCODEBUILD_LOG}" 2>&1; then
+    echo "✓ xcodebuild succeeded (last 20 lines):"
+    tail -20 "${XCODEBUILD_LOG}"
+else
+    echo "❌ xcodebuild failed (last 120 lines):"
+    tail -120 "${XCODEBUILD_LOG}"
+    exit 1
+fi
 
 # Find the built app bundle
 BUILT_APP=$(find "${BUILD_DIR}" -name "${APP_NAME}.app" -type d | head -1)
@@ -57,7 +82,7 @@ if [ -z "${BUILT_APP}" ]; then
 fi
 
 echo "Copying app bundle to current directory..."
-cp -R "${BUILT_APP}" "${APP_BUNDLE}"
+ditto --norsrc "${BUILT_APP}" "${APP_BUNDLE}"
 
 # Remove extended attributes that can cause code signing issues
 echo "Cleaning extended attributes..."
@@ -66,11 +91,24 @@ xattr -dr com.apple.provenance "${APP_BUNDLE}" 2>/dev/null || true
 
 # Code sign the app bundle
 echo "Code signing app bundle..."
-codesign --force --deep --sign - "${APP_BUNDLE}"
+if [ "${SIGNING_MODE}" = "developer-id" ]; then
+    codesign --force --deep --timestamp --options runtime --sign "${SIGN_IDENTITY}" "${APP_BUNDLE}"
+else
+    codesign --force --deep --sign - "${APP_BUNDLE}"
+fi
 
 # Verify the app bundle
 echo "Verifying app bundle..."
 codesign -dvvv --deep "${APP_BUNDLE}" > /dev/null 2>&1 && echo "✓ Code signing verified" || echo "⚠ Code signing has warnings"
+
+if [ "${SIGNING_MODE}" = "developer-id" ]; then
+    echo "Checking Gatekeeper assessment..."
+    if spctl -a -vv "${APP_BUNDLE}" > /dev/null 2>&1; then
+        echo "✓ Gatekeeper accepted"
+    else
+        echo "⚠ Gatekeeper rejected (usually means notarization is still required)"
+    fi
+fi
 
 # Check if universal binary
 if file "${CONTENTS_DIR}/MacOS/${APP_NAME}" | grep -q "universal"; then
@@ -87,3 +125,8 @@ echo "To run the app:"
 echo "  open ${APP_BUNDLE}"
 echo ""
 echo "Or double-click ${APP_BUNDLE} in Finder"
+if [ "${SIGNING_MODE}" = "developer-id" ]; then
+    echo ""
+    echo "Signed with Developer ID identity: ${SIGN_IDENTITY}"
+    echo "If Gatekeeper still rejects, notarize the app before distribution."
+fi

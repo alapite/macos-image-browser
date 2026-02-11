@@ -57,10 +57,14 @@ struct KeyEventHandlingView: NSViewRepresentable {
                       !self.isSlideshowRunning else { return event }
 
                 if event.keyCode == 123 { // Left arrow
-                    self.appState?.navigateToPrevious()
+                    Task { @MainActor [weak appState = self.appState] in
+                        appState?.navigateToPrevious()
+                    }
                     return nil // Consume the event
                 } else if event.keyCode == 124 { // Right arrow
-                    self.appState?.navigateToNext()
+                    Task { @MainActor [weak appState = self.appState] in
+                        appState?.navigateToNext()
+                    }
                     return nil // Consume the event
                 }
 
@@ -140,7 +144,11 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
-                Button(action: { appState.selectFolder() }) {
+                Button(action: {
+                    if let folderURL = FolderPicking.pickFolder() {
+                        appState.loadImages(from: folderURL)
+                    }
+                }) {
                     Label("Open Folder", systemImage: "folder")
                 }
                 .disabled(appState.isSlideshowRunning)
@@ -375,7 +383,7 @@ struct MainImageViewer: View {
             } else if let currentImage = appState.images[safe: appState.currentImageIndex] {
                 GeometryReader { geometry in
                     let maxPixelSize = max(1, Int(max(geometry.size.width, geometry.size.height) * displayScale))
-                    let taskID = "\(currentImage.id.uuidString)|\(maxPixelSize)|\(retryLoadTrigger)"
+                    let taskID = "\(currentImage.id)|\(maxPixelSize)|\(retryLoadTrigger)"
 
                     ZStack {
                         if let renderedImage = renderedImage {
@@ -570,7 +578,7 @@ struct ThumbnailView: View {
                     )
             }
         }
-        .task(id: "\(image.id.uuidString)|\(maxPixelSize)") {
+        .task(id: "\(image.id)|\(maxPixelSize)") {
             let image = await appState.loadDownsampledImage(from: image.url, maxPixelSize: maxPixelSize, cache: .thumbnail)
             if Task.isCancelled {
                 return
@@ -585,6 +593,9 @@ struct ThumbnailView: View {
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
+    @State private var slideshowIntervalValue: Double = 3.0
+    @State private var selectedSortOrder: AppState.SortOrder = .name
+    @State private var didInitializeSettings = false
     
     var body: some View {
         VStack(spacing: 20) {
@@ -599,8 +610,8 @@ struct SettingsView: View {
                             .font(.headline)
                         
                         HStack {
-                            Slider(value: $appState.slideshowInterval, in: 1...10, step: 0.5)
-                            Text("\(Int(appState.slideshowInterval))s")
+                            Slider(value: $slideshowIntervalValue, in: 1...10, step: 0.5)
+                            Text(String(format: "%.1f", slideshowIntervalValue) + "s")
                                 .frame(width: 40)
                         }
                         
@@ -615,7 +626,7 @@ struct SettingsView: View {
                         Text("Sort Order")
                             .font(.headline)
                         
-                        Picker("Sort Order", selection: $appState.sortOrder) {
+                        Picker("Sort Order", selection: $selectedSortOrder) {
                             ForEach(AppState.SortOrder.allCases, id: \.self) { order in
                                 Text(order.rawValue).tag(order)
                             }
@@ -636,6 +647,20 @@ struct SettingsView: View {
         }
         .padding()
         .frame(width: 400, height: 300)
+        .onAppear {
+            didInitializeSettings = false
+            slideshowIntervalValue = appState.slideshowInterval
+            selectedSortOrder = appState.sortOrder
+            didInitializeSettings = true
+        }
+        .onChange(of: slideshowIntervalValue) { newValue in
+            guard didInitializeSettings else { return }
+            appState.updateSlideshowInterval(newValue)
+        }
+        .onChange(of: selectedSortOrder) { newValue in
+            guard didInitializeSettings else { return }
+            appState.setSortOrder(newValue)
+        }
     }
 }
 
@@ -643,6 +668,10 @@ struct CustomOrderEditor: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
     @State private var editingOrder: [String] = []
+
+    private var imageNameByKey: [String: String] {
+        Dictionary(uniqueKeysWithValues: appState.images.map { ($0.id, $0.name) })
+    }
     
     var body: some View {
         VStack(spacing: 20) {
@@ -655,11 +684,11 @@ struct CustomOrderEditor: View {
                 .foregroundColor(.secondary)
             
             List {
-                ForEach(Array(editingOrder.enumerated()), id: \.offset) { index, imageName in
+                ForEach(Array(editingOrder.enumerated()), id: \.offset) { _, imageKey in
                     HStack {
                         Image(systemName: "line.3.horizontal")
                             .foregroundColor(.secondary)
-                        Text(imageName)
+                        Text(imageNameByKey[imageKey] ?? URL(string: imageKey)?.lastPathComponent ?? imageKey)
                             .font(.caption)
                     }
                 }
@@ -686,7 +715,7 @@ struct CustomOrderEditor: View {
         .padding()
         .frame(width: 500, height: 450)
         .onAppear {
-            editingOrder = appState.images.map { $0.name }
+            editingOrder = appState.images.map { $0.id }
         }
     }
 }

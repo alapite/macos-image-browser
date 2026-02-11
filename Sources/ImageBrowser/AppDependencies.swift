@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 protocol FileSystemProviding {
     func enumerator(
@@ -37,6 +38,15 @@ struct LocalFileSystem: FileSystemProviding {
 protocol PreferencesStore {
     func data(forKey key: String) -> Data?
     func set(_ data: Data, forKey key: String)
+}
+
+enum DownsamplingCacheKind {
+    case thumbnail
+    case main
+}
+
+protocol ImageDownsamplingProviding: Actor {
+    func loadImage(from url: URL, maxPixelSize: Int, cache: DownsamplingCacheKind) async -> CGImage?
 }
 
 struct UserDefaultsPreferencesStore: PreferencesStore {
