@@ -660,23 +660,32 @@ final class AppStateTests: XCTestCase {
         appState.images = createNamedImages(names: ["0.jpg", "1.jpg", "2.jpg", "3.jpg", "4.jpg"])
 
         appState.prefetchMainImages(around: 2, maxPixelSize: 64)
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        let initialNeighborStarted = await pipeline.waitForRequest(
+            appState.images[1].url,
+            cache: .main,
+            timeoutNanoseconds: 1_000_000_000
+        )
+        XCTAssertTrue(initialNeighborStarted, "Initial prefetch should begin before replacement")
         appState.prefetchMainImages(around: 1, maxPixelSize: 64)
 
-        try? await Task.sleep(nanoseconds: 700_000_000)
-        let requestedURLs = await pipeline.recordedURLs()
+        let replacementNeighbor = await pipeline.waitForAnyRequest(
+            [appState.images[0].url, appState.images[2].url],
+            cache: .main,
+            timeoutNanoseconds: 1_000_000_000
+        )
+        XCTAssertNotNil(
+            replacementNeighbor,
+            "Replacement prefetch should load neighbors for the latest index context"
+        )
 
-        XCTAssertTrue(
-            requestedURLs.contains(appState.images[1].url),
-            "Initial prefetch should begin before replacement"
+        let outdatedNeighborRequested = await pipeline.waitForRequest(
+            appState.images[3].url,
+            cache: .main,
+            timeoutNanoseconds: 500_000_000
         )
         XCTAssertFalse(
-            requestedURLs.contains(appState.images[3].url),
+            outdatedNeighborRequested,
             "Old main-image prefetch should be canceled before loading the second outdated neighbor"
-        )
-        XCTAssertTrue(
-            requestedURLs.contains(appState.images[0].url) || requestedURLs.contains(appState.images[2].url),
-            "Replacement prefetch should load neighbors for the latest index context"
         )
     }
 
@@ -694,17 +703,25 @@ final class AppStateTests: XCTestCase {
         _ = await pipeline.waitForFirstRequest(in: folderA, timeoutNanoseconds: 1_000_000_000)
         appState.loadImages(from: folderB)
 
-        try? await Task.sleep(nanoseconds: 900_000_000)
-        let requestedURLs = await pipeline.recordedURLs()
-        let requestedPaths = requestedURLs.map { $0.standardizedFileURL.path }
-
-        XCTAssertFalse(
-            requestedPaths.contains(folderA.appendingPathComponent("A2.jpg").standardizedFileURL.path),
-            "Old thumbnail prefetch should be canceled when switching folders"
+        let replacementContextStarted = await pipeline.waitForFirstRequest(
+            in: folderB,
+            cache: .thumbnail,
+            timeoutNanoseconds: 1_500_000_000
         )
         XCTAssertTrue(
-            requestedPaths.contains(where: { $0.hasPrefix(folderB.standardizedFileURL.path) }),
+            replacementContextStarted,
             "New folder context should trigger replacement thumbnail prefetch"
+        )
+
+        let outdatedRequestObserved = await pipeline.waitForRequest(
+            folderA.appendingPathComponent("A2.jpg"),
+            cache: .thumbnail,
+            timeoutNanoseconds: 500_000_000
+        )
+
+        XCTAssertFalse(
+            outdatedRequestObserved,
+            "Old thumbnail prefetch should be canceled when switching folders"
         )
     }
 
@@ -722,11 +739,14 @@ final class AppStateTests: XCTestCase {
 
         appState.navigateToNext()
 
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
-        let thumbnailPaths = await pipeline.recordedPaths(for: .thumbnail)
+        let farThumbnailObserved = await pipeline.waitForRequest(
+            folder.appendingPathComponent("N55.jpg"),
+            cache: .thumbnail,
+            timeoutNanoseconds: 2_500_000_000
+        )
 
         XCTAssertTrue(
-            thumbnailPaths.contains(folder.appendingPathComponent("N55.jpg").standardizedFileURL.path),
+            farThumbnailObserved,
             "Navigation should not invalidate thumbnail prefetch context"
         )
     }
@@ -768,5 +788,56 @@ actor RecordingDownsamplingPipeline: ImageDownsamplingProviding {
             waited += pollInterval
         }
         return false
+    }
+
+    func waitForFirstRequest(in directory: URL, cache: DownsamplingCacheKind, timeoutNanoseconds: UInt64) async -> Bool {
+        let pollInterval: UInt64 = 20_000_000
+        var waited: UInt64 = 0
+        let directoryPath = directory.standardizedFileURL.path
+        while waited < timeoutNanoseconds {
+            if requests.contains(where: { request in
+                request.cache == cache && request.url.standardizedFileURL.path.hasPrefix(directoryPath)
+            }) {
+                return true
+            }
+            try? await Task.sleep(nanoseconds: pollInterval)
+            waited += pollInterval
+        }
+        return false
+    }
+
+    func waitForRequest(_ url: URL, cache: DownsamplingCacheKind, timeoutNanoseconds: UInt64) async -> Bool {
+        let pollInterval: UInt64 = 20_000_000
+        var waited: UInt64 = 0
+        let requestPath = url.standardizedFileURL.path
+
+        while waited < timeoutNanoseconds {
+            if requests.contains(where: { request in
+                request.cache == cache && request.url.standardizedFileURL.path == requestPath
+            }) {
+                return true
+            }
+            try? await Task.sleep(nanoseconds: pollInterval)
+            waited += pollInterval
+        }
+        return false
+    }
+
+    func waitForAnyRequest(_ urls: [URL], cache: DownsamplingCacheKind, timeoutNanoseconds: UInt64) async -> URL? {
+        guard !urls.isEmpty else { return nil }
+        let pollInterval: UInt64 = 20_000_000
+        var waited: UInt64 = 0
+        let candidatePaths = Set(urls.map { $0.standardizedFileURL.path })
+
+        while waited < timeoutNanoseconds {
+            if let request = requests.first(where: { request in
+                request.cache == cache && candidatePaths.contains(request.url.standardizedFileURL.path)
+            }) {
+                return request.url
+            }
+            try? await Task.sleep(nanoseconds: pollInterval)
+            waited += pollInterval
+        }
+        return nil
     }
 }
