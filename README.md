@@ -1,5 +1,7 @@
 # ImageBrowser
 
+[![CI](https://github.com/alapite/macos-image-browser/actions/workflows/ci.yml/badge.svg)](https://github.com/alapite/macos-image-browser/actions/workflows/ci.yml)
+
 A native macOS image-browsing application built with Swift and SwiftUI.
 
 ## Features
