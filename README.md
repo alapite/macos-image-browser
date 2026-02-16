@@ -32,7 +32,7 @@ A native macOS image-browsing application built with Swift and SwiftUI.
 ## Requirements
 
 - macOS 14.0 or later
-- Xcode 16.2 or later (or Swift 6.0+)
+- Xcode 16.2 or later (or Swift 5.9+)
 
 ## Quick Start - Building the App
 
