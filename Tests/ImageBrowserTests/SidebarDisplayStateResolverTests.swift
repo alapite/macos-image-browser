@@ -2,6 +2,7 @@ import XCTest
 import SwiftUI
 @testable import ImageBrowser
 
+@MainActor
 final class SidebarDisplayStateResolverTests: XCTestCase {
     func testResolve_loadingTakesPrecedence() {
         let state = SidebarDisplayStateResolver.resolve(
