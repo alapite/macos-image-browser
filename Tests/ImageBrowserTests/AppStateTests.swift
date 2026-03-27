@@ -7,16 +7,20 @@ final class AppStateTests: XCTestCase {
     var sut: AppState!
     var preferencesStore: InMemoryPreferencesStore!
 
-    override func setUp() {
-        super.setUp()
-        preferencesStore = InMemoryPreferencesStore()
-        sut = AppState(preferencesStore: preferencesStore)
+    override func setUp() async throws {
+        try await super.setUp()
+        await MainActor.run {
+            preferencesStore = InMemoryPreferencesStore()
+            sut = makeAppState(preferencesStore: preferencesStore)
+        }
     }
 
-    override func tearDown() {
-        sut = nil
-        preferencesStore = nil
-        super.tearDown()
+    override func tearDown() async throws {
+        await MainActor.run {
+            sut = nil
+            preferencesStore = nil
+        }
+        try await super.tearDown()
     }
 
     // MARK: - Helper Methods
@@ -68,6 +72,14 @@ final class AppStateTests: XCTestCase {
             let fileURL = directory.appendingPathComponent(name)
             FileManager.default.createFile(atPath: fileURL.path, contents: Data([0x00]))
         }
+    }
+
+    private func createScanImage(name: String, in directory: URL) -> ImageFile {
+        ImageFile(
+            url: directory.appendingPathComponent(name),
+            name: name,
+            creationDate: Date()
+        )
     }
 
     // MARK: - Navigation Tests
@@ -130,6 +142,28 @@ final class AppStateTests: XCTestCase {
 
         // Then: Index becomes 1
         XCTAssertEqual(sut.currentImageIndex, 1, "Navigate to previous should move to index 1")
+    }
+
+    func testNavigateToNext_skipsUnsupportedAdvancedFormats() {
+        sut.images = createNamedImages(names: ["one.jpg", "two.cr3", "three.heic"])
+        sut.currentImageIndex = 0
+        sut.unsupportedImages = [sut.images[1].url]
+
+        sut.navigateToNext()
+
+        XCTAssertEqual(sut.currentImageIndex, 2)
+        XCTAssertEqual(sut.images[sut.currentImageIndex].name, "three.heic")
+    }
+
+    func testNavigateToPrevious_skipsUnsupportedAdvancedFormats() {
+        sut.images = createNamedImages(names: ["one.jpg", "two.cr3", "three.heic"])
+        sut.currentImageIndex = 2
+        sut.unsupportedImages = [sut.images[1].url]
+
+        sut.navigateToPrevious()
+
+        XCTAssertEqual(sut.currentImageIndex, 0)
+        XCTAssertEqual(sut.images[sut.currentImageIndex].name, "one.jpg")
     }
 
     func testNavigateToIndex_validIndex_changesIndex() {
@@ -395,6 +429,20 @@ final class AppStateTests: XCTestCase {
         XCTAssertFalse(sut.isSlideshowRunning, "Slideshow should remain stopped")
     }
 
+    func testSlideshowTick_skipsUnsupportedAdvancedFormats() {
+        let scheduler = TestSlideshowScheduler()
+        let appState = makeAppState(preferencesStore: preferencesStore, slideshowScheduler: scheduler)
+        appState.images = createNamedImages(names: ["one.jpg", "two.cr3", "three.heic"])
+        appState.currentImageIndex = 0
+        appState.unsupportedImages = [appState.images[1].url]
+
+        appState.startSlideshow()
+        scheduler.fire()
+
+        XCTAssertEqual(appState.currentImageIndex, 2)
+        XCTAssertEqual(appState.images[appState.currentImageIndex].name, "three.heic")
+    }
+
     func testSetSortOrder_resortsImagesAndPersistsPreference() {
         // Given: Images in non-alphabetical order
         sut.images = createNamedImages(names: ["C.jpg", "A.jpg", "B.jpg"])
@@ -460,7 +508,7 @@ final class AppStateTests: XCTestCase {
         }
 
         // Create new AppState instance to test loading
-        let newAppState = AppState(preferencesStore: preferencesStore)
+        let newAppState = makeAppState(preferencesStore: preferencesStore)
 
         // Then: Values restored
         XCTAssertEqual(newAppState.slideshowInterval, 4.0, "Should restore slideshow interval")
@@ -472,7 +520,7 @@ final class AppStateTests: XCTestCase {
         // Given: No existing preferences
 
         // When: Create new AppState
-        let newAppState = AppState(preferencesStore: InMemoryPreferencesStore())
+        let newAppState = makeAppState(preferencesStore: InMemoryPreferencesStore())
 
         // Then: Default values used
         XCTAssertEqual(newAppState.slideshowInterval, 3.0, "Should use default interval 3.0")
@@ -612,6 +660,8 @@ final class AppStateTests: XCTestCase {
         let imagesCancellable = sut.$images
             .dropFirst()
             .sink { images in
+                // Skip the initial empty array published by loadImages
+                guard !images.isEmpty else { return }
                 XCTAssertTrue(Thread.isMainThread, "images should publish on the main thread")
                 XCTAssertFalse(images.isEmpty, "Image scan should publish discovered images")
                 completionExpectation.fulfill()
@@ -654,9 +704,320 @@ final class AppStateTests: XCTestCase {
         withExtendedLifetime(cancellable) {}
     }
 
+    func testLoadImages_publishesFirstImageBeforeScanCompletes() async {
+        let scanner = ControlledImageScanner()
+        let appState = makeAppState(preferencesStore: preferencesStore, imageScanner: scanner)
+        let folder = makeTempDirectory()
+        let firstImage = createScanImage(name: "b.jpg", in: folder)
+        let secondImage = createScanImage(name: "a.jpg", in: folder)
+
+        let firstPublishExpectation = expectation(description: "first image published before completion")
+        let completedExpectation = expectation(description: "load completed")
+        var sawFirstPublishWhileLoading = false
+
+        let imagesCancellable = appState.$images
+            .dropFirst()
+            .sink { images in
+                if images.count == 1 {
+                    sawFirstPublishWhileLoading = appState.isLoadingImages
+                    firstPublishExpectation.fulfill()
+                }
+            }
+
+        let loadingCancellable = appState.$isLoadingImages
+            .dropFirst()
+            .sink { isLoading in
+                if !isLoading {
+                    completedExpectation.fulfill()
+                }
+            }
+
+        appState.loadImages(from: folder)
+        await scanner.waitUntilStarted(for: folder)
+        _ = await scanner.emitBatch(
+            .init(images: [firstImage], failedImages: [], isFinal: false),
+            for: folder
+        )
+
+        await fulfillment(of: [firstPublishExpectation], timeout: 1.0)
+        XCTAssertTrue(sawFirstPublishWhileLoading, "First image should publish while loading is still active")
+
+        _ = await scanner.emitBatch(
+            .init(images: [secondImage], failedImages: [], isFinal: true),
+            for: folder
+        )
+
+        await fulfillment(of: [completedExpectation], timeout: 1.0)
+        XCTAssertEqual(
+            appState.images.map(\.name),
+            ["a.jpg", "b.jpg"],
+            "Final completion should apply normal sort semantics after progressive append"
+        )
+        withExtendedLifetime((imagesCancellable, loadingCancellable)) {}
+    }
+
+    func testLoadImages_growsProgressivelyAcrossMultipleBatches() async {
+        let scanner = ControlledImageScanner()
+        let appState = makeAppState(preferencesStore: preferencesStore, imageScanner: scanner)
+        let folder = makeTempDirectory()
+        let imageA = createScanImage(name: "1.jpg", in: folder)
+        let imageB = createScanImage(name: "2.jpg", in: folder)
+        let imageC = createScanImage(name: "3.jpg", in: folder)
+
+        let countOneExpectation = expectation(description: "first progressive step")
+        let countTwoExpectation = expectation(description: "second progressive step")
+        let completionExpectation = expectation(description: "final completion")
+
+        let imagesCancellable = appState.$images
+            .dropFirst()
+            .sink { images in
+                if images.count == 1 {
+                    countOneExpectation.fulfill()
+                } else if images.count == 2 {
+                    countTwoExpectation.fulfill()
+                }
+            }
+
+        let loadingCancellable = appState.$isLoadingImages
+            .dropFirst()
+            .sink { isLoading in
+                if !isLoading {
+                    completionExpectation.fulfill()
+                }
+            }
+
+        appState.loadImages(from: folder)
+        await scanner.waitUntilStarted(for: folder)
+
+        _ = await scanner.emitBatch(
+            .init(images: [imageA], failedImages: [], isFinal: false),
+            for: folder
+        )
+        _ = await scanner.emitBatch(
+            .init(images: [imageB], failedImages: [], isFinal: false),
+            for: folder
+        )
+
+        await fulfillment(of: [countOneExpectation, countTwoExpectation], timeout: 1.0)
+
+        _ = await scanner.emitBatch(
+            .init(images: [imageC], failedImages: [], isFinal: true),
+            for: folder
+        )
+        await fulfillment(of: [completionExpectation], timeout: 1.0)
+        XCTAssertEqual(appState.images.count, 3, "Final image list should include all progressive batches")
+        withExtendedLifetime((imagesCancellable, loadingCancellable)) {}
+    }
+
+    func testLoadImages_folderSwitchSuppressesStaleScanResults() async {
+        let scanner = ControlledImageScanner()
+        let appState = makeAppState(preferencesStore: preferencesStore, imageScanner: scanner)
+        let folderA = makeTempDirectory()
+        let folderB = makeTempDirectory()
+        let staleImage = createScanImage(name: "stale.jpg", in: folderA)
+        let currentImage = createScanImage(name: "current.jpg", in: folderB)
+
+        let completedExpectation = expectation(description: "latest folder completed")
+        let loadingCancellable = appState.$isLoadingImages
+            .dropFirst()
+            .sink { isLoading in
+                if !isLoading {
+                    completedExpectation.fulfill()
+                }
+            }
+
+        appState.loadImages(from: folderA)
+        await scanner.waitUntilStarted(for: folderA)
+
+        appState.loadImages(from: folderB)
+        await scanner.waitUntilStarted(for: folderB)
+
+        _ = await scanner.emitBatch(
+            .init(images: [staleImage], failedImages: [], isFinal: true),
+            for: folderA
+        )
+
+        XCTAssertTrue(
+            appState.images.isEmpty,
+            "Stale folder completion should be ignored while latest folder is still loading"
+        )
+        XCTAssertTrue(appState.isLoadingImages, "Stale completion should not stop loading for active generation")
+
+        _ = await scanner.emitBatch(
+            .init(images: [currentImage], failedImages: [], isFinal: true),
+            for: folderB
+        )
+
+        await fulfillment(of: [completedExpectation], timeout: 1.0)
+        XCTAssertEqual(appState.images.map(\.name), ["current.jpg"], "Only latest folder scan should be published")
+        XCTAssertEqual(
+            appState.selectedFolder?.standardizedFileURL,
+            folderB.standardizedFileURL,
+            "Selected folder should remain on latest load request"
+        )
+        withExtendedLifetime(loadingCancellable) {}
+    }
+
+    func testLoadImages_loadingStateRemainsTrueUntilCurrentGenerationCompletes() async {
+        let scanner = ControlledImageScanner()
+        let appState = makeAppState(preferencesStore: preferencesStore, imageScanner: scanner)
+        let folderA = makeTempDirectory()
+        let folderB = makeTempDirectory()
+        let imageA = createScanImage(name: "a.jpg", in: folderA)
+        let imageB = createScanImage(name: "b.jpg", in: folderB)
+
+        let completedExpectation = expectation(description: "active generation completes")
+        let loadingCancellable = appState.$isLoadingImages
+            .dropFirst()
+            .sink { isLoading in
+                if !isLoading {
+                    completedExpectation.fulfill()
+                }
+            }
+
+        appState.loadImages(from: folderA)
+        await scanner.waitUntilStarted(for: folderA)
+        XCTAssertTrue(appState.isLoadingImages, "Loading should begin immediately for first folder")
+
+        appState.loadImages(from: folderB)
+        await scanner.waitUntilStarted(for: folderB)
+        XCTAssertTrue(appState.isLoadingImages, "Loading should remain true while newer generation is active")
+
+        _ = await scanner.emitBatch(
+            .init(images: [imageA], failedImages: [], isFinal: true),
+            for: folderA
+        )
+        XCTAssertTrue(appState.isLoadingImages, "Stale generation completion must not end active generation loading")
+
+        _ = await scanner.emitBatch(
+            .init(images: [imageB], failedImages: [], isFinal: true),
+            for: folderB
+        )
+
+        await fulfillment(of: [completedExpectation], timeout: 1.0)
+        XCTAssertFalse(appState.isLoadingImages, "Loading should stop only when current generation reaches terminal state")
+        withExtendedLifetime(loadingCancellable) {}
+    }
+
+    func testLoadImages_keepsTargetedAdvancedFormatsInImageListBeforeRenderAttempt() async {
+        let scanner = ControlledImageScanner()
+        let appState = makeAppState(preferencesStore: preferencesStore, imageScanner: scanner)
+        let folder = makeTempDirectory()
+        let rawImage = createScanImage(name: "camera.cr3", in: folder)
+        let heicImage = createScanImage(name: "device.heic", in: folder)
+
+        let completionExpectation = expectation(description: "scan completed")
+        let cancellable = appState.$isLoadingImages
+            .dropFirst()
+            .sink { isLoading in
+                if !isLoading {
+                    completionExpectation.fulfill()
+                }
+            }
+
+        appState.loadImages(from: folder)
+        await scanner.waitUntilStarted(for: folder)
+
+        _ = await scanner.emitBatch(
+            .init(images: [rawImage, heicImage], failedImages: [], isFinal: true),
+            for: folder
+        )
+
+        await fulfillment(of: [completionExpectation], timeout: 1.0)
+        XCTAssertEqual(Set(appState.images.map(\.name)), ["camera.cr3", "device.heic"])
+        XCTAssertTrue(appState.failedImages.isEmpty, "Render failures should not be inferred during scan-only enumeration")
+        withExtendedLifetime(cancellable) {}
+    }
+
+    func testRecordLoadResult_tracksUnsupportedAdvancedFormatsSeparatelyFromFailedImages() {
+        let imageFile = ImageFile(
+            url: URL(fileURLWithPath: "/tmp/sample.cr3"),
+            name: "sample.cr3",
+            creationDate: Date()
+        )
+
+        sut.recordLoadResult(for: imageFile, image: nil)
+
+        XCTAssertTrue(sut.unsupportedImages.contains(imageFile.url))
+        XCTAssertFalse(sut.failedImages.contains(imageFile.url))
+    }
+
+    func testRecordLoadResult_tracksBrokenJpegInFailedImagesNotUnsupportedImages() {
+        let imageFile = ImageFile(
+            url: URL(fileURLWithPath: "/tmp/broken.jpg"),
+            name: "broken.jpg",
+            creationDate: Date()
+        )
+
+        sut.recordLoadResult(for: imageFile, image: nil)
+
+        XCTAssertTrue(sut.failedImages.contains(imageFile.url))
+        XCTAssertFalse(sut.unsupportedImages.contains(imageFile.url))
+    }
+
+    func testLoadDownsampledImage_reducesRequestedSizeForLargeRawFiles() async {
+        let pipeline = RecordingDownsamplingPipeline(delayNanoseconds: 0)
+        let appState = makeAppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
+        let rawURL = URL(fileURLWithPath: "/tmp/large.nef")
+        let rawImage = ImageFile(
+            url: rawURL,
+            name: "large.nef",
+            creationDate: Date(),
+            fileSizeBytes: 120_000_000
+        )
+
+        _ = await appState.loadDownsampledImage(for: rawImage, maxPixelSize: 6000, cache: .main)
+
+        let requestedSize = await pipeline.recordedMaxPixelSize(for: rawURL, cache: .main)
+        XCTAssertEqual(requestedSize, 3072)
+    }
+
+    func testMainImageRequestSize_isNormalizedForCacheReuse() async {
+        let pipeline = RecordingDownsamplingPipeline(delayNanoseconds: 0)
+        let appState = makeAppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
+        let image = ImageFile(
+            url: URL(fileURLWithPath: "/tmp/cache-reuse.jpg"),
+            name: "cache-reuse.jpg",
+            creationDate: Date(),
+            fileSizeBytes: 5_000_000
+        )
+
+        _ = await appState.loadDownsampledImage(for: image, maxPixelSize: 3013, cache: .main)
+        _ = await appState.loadDownsampledImage(for: image, maxPixelSize: 3070, cache: .main)
+
+        let recordedSizes = await pipeline.recordedMaxPixelSizes(for: image.url, cache: .main)
+        XCTAssertEqual(recordedSizes, [3072, 3072], "Nearby viewer request sizes should normalize to a shared cache size")
+    }
+
+    func testNormalizedMainImagePixelSize_capsAt8192() {
+        let appState = makeAppState(preferencesStore: preferencesStore)
+
+        let normalized = appState.normalizedMainImagePixelSize(12_000)
+
+        XCTAssertEqual(normalized, 8192)
+    }
+
+    func testPrefetchMainImages_usesNormalizedMainImageRequestSize() async {
+        let pipeline = RecordingDownsamplingPipeline(delayNanoseconds: 0)
+        let appState = makeAppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
+        appState.images = createNamedImages(names: ["0.jpg", "1.jpg", "2.jpg"])
+
+        appState.prefetchMainImages(around: 1, maxPixelSize: 3013)
+
+        let firstNeighborStarted = await pipeline.waitForAnyRequest(
+            [appState.images[0].url, appState.images[2].url],
+            cache: .main,
+            timeoutNanoseconds: 1_000_000_000
+        )
+        XCTAssertNotNil(firstNeighborStarted, "Neighbor prefetch should start for adjacent images")
+
+        let neighborSizes = await pipeline.recordedMaxPixelSizes(for: appState.images[0].url, cache: .main)
+        XCTAssertEqual(neighborSizes, [3072], "Main-image prefetch should use the same normalized request sizing as direct viewing")
+    }
+
     func testPrefetchMainImages_whenIndexContextChanges_cancelsReplacedWork() async {
         let pipeline = RecordingDownsamplingPipeline(delayNanoseconds: 200_000_000)
-        let appState = AppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
+        let appState = makeAppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
         appState.images = createNamedImages(names: ["0.jpg", "1.jpg", "2.jpg", "3.jpg", "4.jpg"])
 
         appState.prefetchMainImages(around: 2, maxPixelSize: 64)
@@ -689,9 +1050,41 @@ final class AppStateTests: XCTestCase {
         )
     }
 
+    func testPrefetchMainImages_whenAppStateIsReleased_cancelsOutstandingWork() async {
+        let pipeline = RecordingDownsamplingPipeline(delayNanoseconds: 200_000_000)
+        var appState: AppState? = makeAppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
+        appState?.images = createNamedImages(names: ["0.jpg", "1.jpg", "2.jpg", "3.jpg", "4.jpg"])
+
+        weak let weakAppState = appState
+        let initialNeighborURL = appState!.images[1].url
+        let staleNeighborURL = appState!.images[3].url
+
+        appState?.prefetchMainImages(around: 2, maxPixelSize: 64)
+        let initialNeighborStarted = await pipeline.waitForRequest(
+            initialNeighborURL,
+            cache: .main,
+            timeoutNanoseconds: 1_000_000_000
+        )
+        XCTAssertTrue(initialNeighborStarted, "Initial prefetch should begin before release")
+
+        appState = nil
+
+        XCTAssertNil(weakAppState, "Prefetch task should not retain AppState after release")
+
+        let staleNeighborRequested = await pipeline.waitForRequest(
+            staleNeighborURL,
+            cache: .main,
+            timeoutNanoseconds: 500_000_000
+        )
+        XCTAssertFalse(
+            staleNeighborRequested,
+            "Outstanding prefetch work should be canceled when AppState is released"
+        )
+    }
+
     func testThumbnailPrefetch_whenFolderChanges_cancelsOldFolderWork() async {
         let pipeline = RecordingDownsamplingPipeline(delayNanoseconds: 220_000_000)
-        let appState = AppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
+        let appState = makeAppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
         appState.updateThumbnailPrefetchSize(64)
 
         let folderA = makeTempDirectory()
@@ -727,7 +1120,7 @@ final class AppStateTests: XCTestCase {
 
     func testThumbnailPrefetch_whenNavigating_doesNotInvalidateThumbnailContext() async {
         let pipeline = RecordingDownsamplingPipeline(delayNanoseconds: 8_000_000)
-        let appState = AppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
+        let appState = makeAppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
         appState.updateThumbnailPrefetchSize(64)
 
         let folder = makeTempDirectory()
@@ -750,10 +1143,470 @@ final class AppStateTests: XCTestCase {
             "Navigation should not invalidate thumbnail prefetch context"
         )
     }
+
+    func testLoadImages_folderSwitchPreservesSortOrderAndCurrentSelectionRules() async {
+        let scanner = ControlledImageScanner()
+        let appState = makeAppState(preferencesStore: preferencesStore, imageScanner: scanner)
+        let folderB = makeTempDirectory()
+
+        appState.images = createNamedImages(names: ["old-1.jpg", "old-2.jpg"])
+        appState.currentImageIndex = 1
+        appState.sortOrder = .creationDate
+
+        let newerImage = ImageFile(
+            url: folderB.appendingPathComponent("newer.jpg"),
+            name: "newer.jpg",
+            creationDate: Date(timeIntervalSince1970: 200),
+            fileSizeBytes: 100
+        )
+        let olderImage = ImageFile(
+            url: folderB.appendingPathComponent("older.jpg"),
+            name: "older.jpg",
+            creationDate: Date(timeIntervalSince1970: 100),
+            fileSizeBytes: 100
+        )
+
+        appState.loadImages(from: folderB)
+        await scanner.waitUntilStarted(for: folderB)
+
+        let completionExpectation = expectation(description: "folder B loaded")
+        let cancellable = appState.$isLoadingImages
+            .dropFirst()
+            .sink { isLoading in
+                if !isLoading {
+                    completionExpectation.fulfill()
+                }
+            }
+
+        _ = await scanner.emitBatch(
+            .init(images: [newerImage, olderImage], failedImages: [], isFinal: true),
+            for: folderB
+        )
+
+        await fulfillment(of: [completionExpectation], timeout: 1.0)
+
+        XCTAssertEqual(appState.images.map(\.name), ["older.jpg", "newer.jpg"])
+        XCTAssertEqual(appState.currentImageIndex, 0, "Folder handoff should reset selection to the first valid image in the new folder")
+        withExtendedLifetime(cancellable) {}
+    }
+
+    func testReportThumbnailVisibility_prefetchesOnlyBoundedWindowForLargeFolder() async {
+        let pipeline = RecordingDownsamplingPipeline(delayNanoseconds: 20_000_000)
+        let appState = makeAppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
+        appState.images = createNamedImages(names: (0..<1_500).map { String(format: "Image%04d.jpg", $0) })
+
+        appState.reportThumbnailVisibility(index: 12, maxPixelSize: 96)
+
+        let nearbyObserved = await pipeline.waitForAnyRequest(
+            [appState.images[12].url, appState.images[13].url],
+            cache: .thumbnail,
+            timeoutNanoseconds: 1_000_000_000
+        )
+        XCTAssertNotNil(nearbyObserved, "Visible-window prefetch should start around the current on-screen index")
+
+        let farObserved = await pipeline.waitForRequest(
+            appState.images[400].url,
+            cache: .thumbnail,
+            timeoutNanoseconds: 300_000_000
+        )
+        XCTAssertFalse(farObserved, "Visible-window prefetch should not warm far-away thumbnails in a large folder")
+    }
+
+    func testReportThumbnailVisibility_replacesStaleThumbnailWindowWhenUserScrolls() async {
+        let pipeline = RecordingDownsamplingPipeline(delayNanoseconds: 20_000_000)
+        let appState = makeAppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
+        appState.images = createNamedImages(names: (0..<300).map { String(format: "Image%03d.jpg", $0) })
+
+        appState.reportThumbnailVisibility(index: 10, maxPixelSize: 96)
+        let firstWindowObserved = await pipeline.waitForAnyRequest(
+            [appState.images[10].url, appState.images[11].url],
+            cache: .thumbnail,
+            timeoutNanoseconds: 1_000_000_000
+        )
+        XCTAssertNotNil(firstWindowObserved, "Initial thumbnail window should start prefetching nearby images")
+
+        appState.reportThumbnailVisibility(index: 220, maxPixelSize: 96)
+
+        let secondWindowObserved = await pipeline.waitForAnyRequest(
+            [appState.images[220].url, appState.images[221].url],
+            cache: .thumbnail,
+            timeoutNanoseconds: 1_000_000_000
+        )
+        XCTAssertNotNil(secondWindowObserved, "Reporting a distant visible index should replace the thumbnail window")
+
+        let staleObserved = await pipeline.waitForRequest(
+            appState.images[40].url,
+            cache: .thumbnail,
+            timeoutNanoseconds: 300_000_000
+        )
+        XCTAssertFalse(staleObserved, "Old thumbnail window work should be abandoned after the user scrolls far away")
+    }
+
+    // MARK: - Responsiveness-First Navigation Tests
+
+    func testAdjacentNavigation_keepsCurrentIndexAndImageInSync() async {
+        // Given: Multiple images loaded
+        let appState = makeAppState(preferencesStore: preferencesStore)
+        appState.images = createNamedImages(names: ["A.jpg", "B.jpg", "C.jpg", "D.jpg"])
+        appState.currentImageIndex = 1
+
+        // When: Rapidly navigate through multiple images
+        await MainActor.run {
+            appState.navigateToNext()
+            appState.navigateToNext()
+            appState.navigateToPrevious()
+        }
+
+        // Then: Index stays in sync with navigation calls
+        XCTAssertEqual(appState.currentImageIndex, 2, "Index should match final navigation position")
+        XCTAssertEqual(appState.images[appState.currentImageIndex].name, "C.jpg", "Image should match final position")
+    }
+
+    func testRepeatedRapidNavigation_maintainsCorrectState() async {
+        // Given: Large image set
+        let appState = makeAppState(preferencesStore: preferencesStore)
+        appState.images = createNamedImages(names: (0..<20).map { "Image\($0).jpg" })
+        appState.currentImageIndex = 10
+
+        // When: Execute rapid navigation sequence
+        await MainActor.run {
+            for _ in 0..<15 {
+                appState.navigateToNext()
+            }
+            for _ in 0..<10 {
+                appState.navigateToPrevious()
+            }
+        }
+
+        // Then: Final index reflects net navigation (10 + 15 - 10 = 15)
+        XCTAssertEqual(appState.currentImageIndex, 15, "Rapid navigation should maintain correct index")
+        XCTAssertEqual(appState.images[appState.currentImageIndex].name, "Image15.jpg", "Current image should be correct")
+    }
+
+    func testFarIndexJump_cancelsPreviousPrefetchGeneration() async {
+        // Given: Images and initial prefetch around index 0
+        let pipeline = RecordingDownsamplingPipeline(delayNanoseconds: 50_000_000)
+        let appState = makeAppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
+        appState.images = createNamedImages(names: (0..<100).map { "Image\($0).jpg" })
+        appState.currentImageIndex = 0
+
+        appState.prefetchMainImages(around: 0, maxPixelSize: 128)
+        let initialPrefetchStarted = await pipeline.waitForRequest(
+            appState.images[1].url,
+            cache: .main,
+            timeoutNanoseconds: 500_000_000
+        )
+        XCTAssertTrue(initialPrefetchStarted, "Initial prefetch should start")
+
+        // When: Jump to far index (90) and trigger new prefetch
+        await MainActor.run {
+            appState.navigateToIndex(90)
+        }
+        appState.prefetchMainImages(around: 90, maxPixelSize: 128)
+
+        // Then: New prefetch around index 90 should start
+        let newPrefetchStarted = await pipeline.waitForAnyRequest(
+            [appState.images[89].url, appState.images[91].url],
+            cache: .main,
+            timeoutNanoseconds: 500_000_000
+        )
+        XCTAssertNotNil(newPrefetchStarted, "Far jump should trigger new neighborhood prefetch")
+
+        // And: Old generation should not continue loading additional images
+        let farOldIndexRequested = await pipeline.waitForRequest(
+            appState.images[5].url,
+            cache: .main,
+            timeoutNanoseconds: 200_000_000
+        )
+        XCTAssertFalse(farOldIndexRequested, "Old generation prefetch should be canceled after far jump")
+    }
+
+    func testRapidFarJumps_onlyLatestGenerationCompletes() async {
+        // Given: Large image set
+        let pipeline = RecordingDownsamplingPipeline(delayNanoseconds: 30_000_000)
+        let appState = makeAppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
+        appState.images = createNamedImages(names: (0..<100).map { "Image\($0).jpg" })
+        appState.currentImageIndex = 0
+
+        // When: Execute multiple rapid far jumps with prefetch triggers
+        await MainActor.run {
+            appState.navigateToIndex(10)
+        }
+        appState.prefetchMainImages(around: 10, maxPixelSize: 128)
+
+        try? await Task.sleep(nanoseconds: 20_000_000)
+
+        await MainActor.run {
+            appState.navigateToIndex(50)
+        }
+        appState.prefetchMainImages(around: 50, maxPixelSize: 128)
+
+        try? await Task.sleep(nanoseconds: 20_000_000)
+
+        await MainActor.run {
+            appState.navigateToIndex(80)
+        }
+        appState.prefetchMainImages(around: 80, maxPixelSize: 128)
+
+        // Wait a bit for prefetches to start
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        // Then: Only the latest neighborhood (around 80) should be active
+        let latestPrefetchObserved = await pipeline.waitForAnyRequest(
+            [appState.images[79].url, appState.images[81].url],
+            cache: .main,
+            timeoutNanoseconds: 500_000_000
+        )
+        XCTAssertNotNil(latestPrefetchObserved, "Latest jump should trigger prefetch")
+
+        // Verify early generations were canceled
+        let earlyGenerationObserved = await pipeline.waitForRequest(
+            appState.images[11].url,  // neighbor of first jump
+            cache: .main,
+            timeoutNanoseconds: 100_000_000
+        )
+        XCTAssertFalse(earlyGenerationObserved, "Early generation prefetch should be canceled by later jumps")
+    }
+
+    // MARK: - Memory Stability Tests
+
+    func testSustainedNavigation_doesNotGrowUnbounded() async {
+        // Given: Large image set for sustained navigation
+        let appState = makeAppState(preferencesStore: preferencesStore)
+        appState.images = createNamedImages(names: (0..<200).map { "Image\($0).jpg" })
+        appState.currentImageIndex = 0
+
+        // When: Execute sustained navigation loop (100 navigation steps)
+        await MainActor.run {
+            for _ in 0..<100 {
+                appState.navigateToNext()
+            }
+        }
+
+        // Then: State should remain bounded and consistent
+        XCTAssertEqual(appState.images.count, 200, "Image count should remain constant")
+        XCTAssertEqual(appState.currentImageIndex, 100, "Index should reflect net navigation")
+        XCTAssertFalse(appState.isLoadingImages, "Loading state should not become corrupted")
+    }
+
+    func testFolderChange_cancelsAllPrefetchWork() async {
+        // Given: Initial folder with prefetch
+        let pipeline = RecordingDownsamplingPipeline(delayNanoseconds: 50_000_000)
+        let appState = makeAppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
+
+        let folderA = makeTempDirectory()
+        let folderB = makeTempDirectory()
+        createImageFiles(in: folderA, names: ["A1.jpg", "A2.jpg"])
+        createImageFiles(in: folderB, names: ["B1.jpg", "B2.jpg"])
+
+        appState.updateThumbnailPrefetchSize(64)
+        appState.loadImages(from: folderA)
+        _ = await pipeline.waitForFirstRequest(in: folderA, timeoutNanoseconds: 1_000_000_000)
+
+        // When: Switch to different folder
+        appState.loadImages(from: folderB)
+        _ = await pipeline.waitForFirstRequest(in: folderB, timeoutNanoseconds: 1_000_000_000)
+
+        // Then: Old folder prefetch should be canceled
+        let oldFolderRequest = await pipeline.waitForRequest(
+            folderA.appendingPathComponent("A2.jpg"),
+            cache: .thumbnail,
+            timeoutNanoseconds: 300_000_000
+        )
+        XCTAssertFalse(oldFolderRequest, "Old folder prefetch should be canceled on folder change")
+    }
+
+    func testLongRunningNavigationLoop_doesNotLeakTasks() async {
+        // Given: Image set and prefetch pipeline
+        let pipeline = RecordingDownsamplingPipeline(delayNanoseconds: 10_000_000)
+        let appState = makeAppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
+        appState.images = createNamedImages(names: (0..<50).map { "Image\($0).jpg" })
+        appState.currentImageIndex = 0
+
+        let initialRequestCount = await pipeline.recordedURLs().count
+
+        // When: Execute long navigation loop with prefetch triggers
+        for i in 0..<40 {
+            await MainActor.run {
+                appState.navigateToNext()
+            }
+            appState.prefetchMainImages(around: i + 1, maxPixelSize: 128)
+            try? await Task.sleep(nanoseconds: 5_000_000) // 5ms between navigations
+        }
+
+        // Then: Request count should remain bounded (not scale with loop iterations)
+        let finalRequestCount = await pipeline.recordedURLs().count
+        let requestGrowth = finalRequestCount - initialRequestCount
+
+        // Should request at most 2 images per prefetch (neighbors), not 40+
+        XCTAssertLessThan(requestGrowth, 100, "Request count should remain bounded despite long navigation loop")
+    }
+
+    // MARK: - Performance Metrics Tests
+
+    func testTimeToFirstImage_canBeMeasured() async {
+        // Given: Folder with images
+        let scanner = ControlledImageScanner()
+        let appState = makeAppState(preferencesStore: preferencesStore, imageScanner: scanner)
+        let folder = makeTempDirectory()
+        let firstImage = createScanImage(name: "first.jpg", in: folder)
+
+        let firstImageExpectation = expectation(description: "first image published")
+        var timeToFirstImage: TimeInterval?
+
+        let cancellable = appState.$images
+            .dropFirst()
+            .sink { images in
+                if !images.isEmpty && timeToFirstImage == nil {
+                    timeToFirstImage = Date().timeIntervalSince1970
+                    firstImageExpectation.fulfill()
+                }
+            }
+
+        let startTime = Date().timeIntervalSince1970
+
+        // When: Load folder
+        appState.loadImages(from: folder)
+        await scanner.waitUntilStarted(for: folder)
+        _ = await scanner.emitBatch(
+            .init(images: [firstImage], failedImages: [], isFinal: false),
+            for: folder
+        )
+
+        await fulfillment(of: [firstImageExpectation], timeout: 1.0)
+
+        // Then: Time to first image can be measured
+        XCTAssertNotNil(timeToFirstImage, "Should capture time to first image")
+        if let measuredTime = timeToFirstImage {
+            let elapsed = measuredTime - startTime
+            XCTAssertGreaterThan(elapsed, 0, "Time to first image should be positive")
+            XCTAssertLessThan(elapsed, 1.0, "Time to first image should be under 1 second")
+        }
+        withExtendedLifetime(cancellable) {}
+    }
+
+    func testAdjacentNavigationLatency_canBeMeasured() async {
+        // Given: Images loaded
+        let appState = makeAppState(preferencesStore: preferencesStore)
+        appState.images = createNamedImages(names: ["A.jpg", "B.jpg", "C.jpg"])
+        appState.currentImageIndex = 0
+
+        var navigationTimes: [TimeInterval] = []
+        let expectation1 = expectation(description: "nav 1")
+        let expectation2 = expectation(description: "nav 2")
+
+        // When: Navigate to adjacent images with timing
+        let startTime1 = Date().timeIntervalSince1970
+        await MainActor.run {
+            appState.navigateToNext()
+        }
+        let endTime1 = Date().timeIntervalSince1970
+        navigationTimes.append(endTime1 - startTime1)
+        expectation1.fulfill()
+
+        try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
+
+        let startTime2 = Date().timeIntervalSince1970
+        await MainActor.run {
+            appState.navigateToNext()
+        }
+        let endTime2 = Date().timeIntervalSince1970
+        navigationTimes.append(endTime2 - startTime2)
+        expectation2.fulfill()
+
+        await fulfillment(of: [expectation1, expectation2], timeout: 1.0)
+
+        // Then: Navigation latency can be measured
+        XCTAssertEqual(navigationTimes.count, 2, "Should capture 2 navigation latencies")
+        XCTAssertTrue(navigationTimes.allSatisfy { $0 >= 0 }, "All latencies should be non-negative")
+        XCTAssertTrue(navigationTimes.allSatisfy { $0 < 0.1 }, "All latencies should be under 100ms")
+    }
+
+    func testProgressiveLoadCompletion_canBeMeasured() async {
+        // Given: Controlled scanner
+        let scanner = ControlledImageScanner()
+        let appState = makeAppState(preferencesStore: preferencesStore, imageScanner: scanner)
+        let folder = makeTempDirectory()
+
+        let images = (0..<5).map { i -> ImageFile in
+            createScanImage(name: "img\(i).jpg", in: folder)
+        }
+
+        var completionTime: TimeInterval?
+        let loadExpectation = expectation(description: "load completed")
+        let startTime = Date().timeIntervalSince1970
+
+        let cancellable = appState.$isLoadingImages
+            .dropFirst()
+            .sink { isLoading in
+                if !isLoading && completionTime == nil {
+                    completionTime = Date().timeIntervalSince1970
+                    loadExpectation.fulfill()
+                }
+            }
+
+        // When: Load with progressive batches
+        appState.loadImages(from: folder)
+        await scanner.waitUntilStarted(for: folder)
+
+        for (index, image) in images.enumerated() {
+            let isFinal = (index == images.count - 1)
+            _ = await scanner.emitBatch(
+                .init(images: [image], failedImages: [], isFinal: isFinal),
+                for: folder
+            )
+            try? await Task.sleep(nanoseconds: 20_000_000) // 20ms between batches
+        }
+
+        await fulfillment(of: [loadExpectation], timeout: 2.0)
+
+        // Then: Progressive load completion can be measured
+        XCTAssertNotNil(completionTime, "Should capture completion time")
+        if let measuredTime = completionTime {
+            let elapsed = measuredTime - startTime
+            XCTAssertGreaterThan(elapsed, 0, "Load time should be positive")
+        }
+        withExtendedLifetime(cancellable) {}
+    }
+
+    func testMemorySnapshot_doesNotAlterReleaseBehavior() async {
+        // Given: AppState instance
+        let appState = makeAppState(preferencesStore: preferencesStore)
+
+        // When: Capture metrics snapshot
+        let imageCountBefore = appState.images.count
+        let loadingBefore = appState.isLoadingImages
+
+        let metrics = appState.captureMetrics()
+
+        let imageCountAfter = appState.images.count
+        let loadingAfter = appState.isLoadingImages
+
+        // Then: Snapshot should not modify state
+        XCTAssertEqual(imageCountBefore, imageCountAfter, "Snapshot should not change image count")
+        XCTAssertEqual(loadingBefore, loadingAfter, "Snapshot should not change loading state")
+        XCTAssertEqual(metrics.imageCount, 0, "Metrics should reflect current state")
+    }
+
+    func testMetricsCapture_providesRepeatableMeasurements() async {
+        // Given: AppState with loaded images
+        let appState = makeAppState(preferencesStore: preferencesStore)
+        appState.images = createNamedImages(names: ["A.jpg", "B.jpg", "C.jpg"])
+
+        // When: Capture metrics multiple times
+        let metrics1 = appState.captureMetrics()
+        try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
+        let metrics2 = appState.captureMetrics()
+
+        // Then: Measurements should be consistent
+        XCTAssertEqual(metrics1.imageCount, metrics2.imageCount, "Image count should be stable")
+        XCTAssertEqual(metrics1.imageCount, 3, "Should capture correct image count")
+        XCTAssertNotEqual(metrics1.capturedAt, metrics2.capturedAt, "Timestamps should differ")
+    }
 }
 
 actor RecordingDownsamplingPipeline: ImageDownsamplingProviding {
-    private var requests: [(url: URL, cache: DownsamplingCacheKind)] = []
+    private var requests: [(url: URL, maxPixelSize: Int, cache: DownsamplingCacheKind)] = []
     private let delayNanoseconds: UInt64
 
     init(delayNanoseconds: UInt64) {
@@ -761,7 +1614,7 @@ actor RecordingDownsamplingPipeline: ImageDownsamplingProviding {
     }
 
     func loadImage(from url: URL, maxPixelSize: Int, cache: DownsamplingCacheKind) async -> CGImage? {
-        requests.append((url: url, cache: cache))
+        requests.append((url: url, maxPixelSize: maxPixelSize, cache: cache))
         try? await Task.sleep(nanoseconds: delayNanoseconds)
         return nil
     }
@@ -774,6 +1627,20 @@ actor RecordingDownsamplingPipeline: ImageDownsamplingProviding {
         requests
             .filter { $0.cache == cache }
             .map { $0.url.standardizedFileURL.path }
+    }
+
+    func recordedMaxPixelSize(for url: URL, cache: DownsamplingCacheKind) -> Int? {
+        requests.last(where: { request in
+            request.url.standardizedFileURL == url.standardizedFileURL && request.cache == cache
+        })?.maxPixelSize
+    }
+
+    func recordedMaxPixelSizes(for url: URL, cache: DownsamplingCacheKind) -> [Int] {
+        requests
+            .filter { request in
+                request.url.standardizedFileURL == url.standardizedFileURL && request.cache == cache
+            }
+            .map(\.maxPixelSize)
     }
 
     func waitForFirstRequest(in directory: URL, timeoutNanoseconds: UInt64) async -> Bool {
@@ -840,4 +1707,115 @@ actor RecordingDownsamplingPipeline: ImageDownsamplingProviding {
         }
         return nil
     }
+}
+
+actor ControlledImageScanner: ImageDirectoryScanning {
+    private typealias BatchHandler = @Sendable (ProgressiveImageScanBatch) async -> Bool
+    private final class ScanSession {
+        var handler: BatchHandler
+        var isCompleted: Bool = false
+        var task: Task<Void, Never>?
+
+        init(handler: @escaping @Sendable (ProgressiveImageScanBatch) async -> Bool) {
+            self.handler = handler
+        }
+    }
+
+    private var sessions: [String: ScanSession] = [:]
+    private var startWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
+
+    private func isSessionCompleted(for key: String) -> Bool {
+        sessions[key]?.isCompleted ?? false
+    }
+
+    func scanImagesProgressively(
+        in url: URL,
+        batchSize: Int,
+        onBatch: @escaping @Sendable (ProgressiveImageScanBatch) async -> Bool
+    ) async {
+        _ = batchSize
+        let key = Self.sessionKey(for: url)
+        let session = ScanSession(handler: onBatch)
+        sessions[key] = session
+
+        if let waiters = startWaiters.removeValue(forKey: key) {
+            for waiter in waiters {
+                waiter.resume()
+            }
+        }
+
+        // Create a task that will complete when the scan finishes
+        let scanTask = Task<Void, Never> {
+            await withCheckedContinuation { continuation in
+                session.task = Task { [weak self] in
+                    // Poll for completion
+                    while !Task.isCancelled {
+                        let isCompleted = await self?.isSessionCompleted(for: key) ?? false
+                        if isCompleted {
+                            continuation.resume()
+                            return
+                        }
+                        try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
+                    }
+                    continuation.resume()
+                }
+            }
+        }
+
+        // Wait for the scan to complete
+        await scanTask.value
+
+        // Cleanup
+        session.task?.cancel()
+        session.task = nil
+        sessions.removeValue(forKey: key)
+    }
+
+    func waitUntilStarted(for url: URL) async {
+        let key = Self.sessionKey(for: url)
+        if sessions[key] != nil {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            startWaiters[key, default: []].append(continuation)
+        }
+    }
+
+    func emitBatch(_ batch: ProgressiveImageScanBatch, for url: URL) async -> Bool {
+        let key = Self.sessionKey(for: url)
+        guard let session = sessions[key] else { return false }
+
+        let shouldContinue = await session.handler(batch)
+        if batch.isFinal || !shouldContinue {
+            session.isCompleted = true
+        }
+        return shouldContinue
+    }
+
+    private static func sessionKey(for url: URL) -> String {
+        url.standardizedFileURL.path
+    }
+}
+
+@MainActor
+private final class TestSlideshowScheduler: SlideshowScheduling {
+    private var action: (@MainActor () -> Void)?
+
+    func scheduleRepeating(
+        every interval: TimeInterval,
+        action: @escaping @MainActor () -> Void
+    ) -> any SlideshowTimer {
+        _ = interval
+        self.action = action
+        return TestSlideshowTimer()
+    }
+
+    func fire() {
+        action?()
+    }
+}
+
+private final class TestSlideshowTimer: SlideshowTimer {
+    func invalidate() {}
 }

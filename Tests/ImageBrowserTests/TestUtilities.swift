@@ -15,6 +15,68 @@ final class InMemoryPreferencesStore: PreferencesStore {
     }
 }
 
+struct TestEnvironmentProvider: EnvironmentProviding {
+    let environment: [String: String]
+
+    init(environment: [String: String] = [:]) {
+        self.environment = environment
+    }
+}
+
+@MainActor
+func makeAppStateDependencies(
+    preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
+    fileSystem: FileSystemProviding = LocalFileSystem(),
+    downsamplingPipeline: ImageDownsamplingProviding = ImageDownsamplingPipeline(thumbnailLimit: 1000),
+    imageScanner: (any ImageDirectoryScanning)? = nil,
+    imageCache: ImageCaching = NSImageCacheStore(totalCostLimit: 1024 * 1024 * 100, countLimit: 100),
+    slideshowScheduler: SlideshowScheduling = TimerSlideshowScheduler(),
+    environment: EnvironmentProviding = TestEnvironmentProvider(),
+    fileWatcherFactory: (@Sendable (URL) -> any FileWatching)? = { watchURL in
+        FileWatcher(fileSystem: LocalFileSystem(), url: watchURL)
+    }
+) -> AppStateDependencies {
+    let resolvedFileSystem = fileSystem
+
+    return AppStateDependencies(
+        fileSystem: resolvedFileSystem,
+        preferencesStore: preferencesStore,
+        downsamplingPipeline: downsamplingPipeline,
+        imageScanner: imageScanner ?? ImageDirectoryScanner(fileSystem: resolvedFileSystem),
+        imageCache: imageCache,
+        slideshowScheduler: slideshowScheduler,
+        environment: environment,
+        fileWatcherFactory: fileWatcherFactory
+    )
+}
+
+@MainActor
+func makeAppState(
+    preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
+    fileSystem: FileSystemProviding = LocalFileSystem(),
+    downsamplingPipeline: ImageDownsamplingProviding = ImageDownsamplingPipeline(thumbnailLimit: 1000),
+    imageScanner: (any ImageDirectoryScanning)? = nil,
+    imageCache: ImageCaching = NSImageCacheStore(totalCostLimit: 1024 * 1024 * 100, countLimit: 100),
+    slideshowScheduler: SlideshowScheduling = TimerSlideshowScheduler(),
+    environment: EnvironmentProviding = TestEnvironmentProvider(),
+    fileWatcherFactory: (@Sendable (URL) -> any FileWatching)? = { watchURL in
+        FileWatcher(fileSystem: LocalFileSystem(), url: watchURL)
+    }
+) -> AppState {
+    AppState(
+        dependencies: makeAppStateDependencies(
+            preferencesStore: preferencesStore,
+            fileSystem: fileSystem,
+            downsamplingPipeline: downsamplingPipeline,
+            imageScanner: imageScanner,
+            imageCache: imageCache,
+            slideshowScheduler: slideshowScheduler,
+            environment: environment,
+            fileWatcherFactory: fileWatcherFactory
+        )
+    )
+}
+
 enum TestFixtures {
     static func url(resource: String, extension ext: String) -> URL {
         let bundle = fixturesBundle()
@@ -29,10 +91,9 @@ enum TestFixtures {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let sourceFixturesURL = sourceRoot
+        let sourceFixturesRoot = sourceRoot
             .appendingPathComponent("Tests/Fixtures", isDirectory: true)
-            .appendingPathComponent(filename)
-        if FileManager.default.fileExists(atPath: sourceFixturesURL.path) {
+        if let sourceFixturesURL = findFixture(named: filename, under: sourceFixturesRoot) {
             return sourceFixturesURL
         }
         let rootCandidates = [
@@ -43,9 +104,8 @@ enum TestFixtures {
 
         for root in rootCandidates {
             let rootURL = URL(fileURLWithPath: root, isDirectory: true)
-            let fixturesURL = rootURL.appendingPathComponent("Tests/Fixtures", isDirectory: true)
-                .appendingPathComponent(filename)
-            if FileManager.default.fileExists(atPath: fixturesURL.path) {
+            let fixturesRoot = rootURL.appendingPathComponent("Tests/Fixtures", isDirectory: true)
+            if let fixturesURL = findFixture(named: filename, under: fixturesRoot) {
                 return fixturesURL
             }
         }
@@ -62,6 +122,29 @@ private func fixturesBundle() -> Bundle {
 #else
     return Bundle(for: FixturesBundleLocator.self)
 #endif
+}
+
+private func findFixture(named filename: String, under root: URL) -> URL? {
+    guard FileManager.default.fileExists(atPath: root.path) else {
+        return nil
+    }
+
+    if FileManager.default.fileExists(atPath: root.appendingPathComponent(filename).path) {
+        return root.appendingPathComponent(filename)
+    }
+
+    let enumerator = FileManager.default.enumerator(
+        at: root,
+        includingPropertiesForKeys: [.isRegularFileKey],
+        options: [.skipsHiddenFiles]
+    )
+
+    while let candidate = enumerator?.nextObject() as? URL {
+        guard candidate.lastPathComponent == filename else { continue }
+        return candidate
+    }
+
+    return nil
 }
 
 func makeTempDirectory() -> URL {

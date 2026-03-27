@@ -2,15 +2,15 @@ name: ImageBrowser
 options:
   bundleIdPrefix: com.imagebrowser
   deploymentTarget:
-    macOS: "13.0"
-  xcodeVersion: "15.0"
+    macOS: "14.0"
+  xcodeVersion: "16.0"
   createIntermediateGroups: true
   groupSortPosition: top
   generateEmptyDirectories: true
 
 settings:
   base:
-    SWIFT_VERSION: "5.9"
+    SWIFT_VERSION: "6.0"
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: ""
@@ -18,20 +18,24 @@ settings:
     CODE_SIGNING_REQUIRED: "NO"
     CODE_SIGNING_ALLOWED: "NO"
 
+packages:
+  GRDB.swift:
+    url: https://github.com/groue/GRDB.swift.git
+    from: 7.10.0
+
 targets:
   ImageBrowser:
     type: application
     platform: macOS
-    deploymentTarget: "13.0"
+    deploymentTarget: "14.0"
     sources:
-      - path: Sources/ImageBrowser/ImageBrowserApp.swift
-      - path: Sources/ImageBrowser/AppDependencies.swift
-      - path: Sources/ImageBrowser/AppState.swift
-      - path: Sources/ImageBrowser/ContentView.swift
-      - path: Sources/ImageBrowser/FolderPicking.swift
-      - path: Sources/ImageBrowser/Assets.xcassets
-    resources:
-      - path: Sources/ImageBrowser/Info.plist
+      - path: Sources/ImageBrowser
+        excludes:
+          - Info.plist
+          - "**/README.md"
+    dependencies:
+      - package: GRDB.swift
+        product: GRDB
     settings:
       base:
         PRODUCT_NAME: ImageBrowser
@@ -44,14 +48,14 @@ targets:
           - "@executable_path/../Frameworks"
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_ENTITLEMENTS: ""
-        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
         SWIFT_EMIT_LOC_STRINGS: YES
     preBuildScripts: []
     postBuildScripts: []
   ImageBrowserUITests:
     type: bundle.ui-testing
     platform: macOS
-    deploymentTarget: "13.0"
+    deploymentTarget: "14.0"
     sources:
       - path: UITests
     dependencies:
@@ -59,7 +63,7 @@ targets:
   ImageBrowserTests:
     type: bundle.unit-test
     platform: macOS
-    deploymentTarget: "13.0"
+    deploymentTarget: "14.0"
     sources:
       - path: Tests/ImageBrowserTests
     resources:

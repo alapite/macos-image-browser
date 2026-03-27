@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "ImageBrowser",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     products: [
         .executable(
@@ -15,13 +15,20 @@ let package = Package(
         ),
     ],
     dependencies: [
-        // Add any external dependencies here if needed
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.10.0")
     ],
     targets: [
         .executableTarget(
             name: "ImageBrowser",
-            dependencies: [],
-            exclude: ["Info.plist"],
+            dependencies: [
+                .product(name: "GRDB", package: "GRDB.swift")
+            ],
+            exclude: [
+                "Info.plist",
+                "Database/README.md",
+                "Models/README.md",
+                "Stores/README.md"
+            ],
             resources: [
                 .process("Assets.xcassets")
             ]
@@ -30,6 +37,18 @@ let package = Package(
             name: "ImageBrowserTests",
             dependencies: ["ImageBrowser"],
             path: "Tests",
+            exclude: [
+                "Shell",
+                "Fixtures/basic/ImageBrowserUITests.sqlite",
+                "Fixtures/basic/ImageBrowserUITests.sqlite-shm",
+                "Fixtures/basic/ImageBrowserUITests.sqlite-wal",
+                "Fixtures/corrupted/ImageBrowserUITests.sqlite",
+                "Fixtures/corrupted/ImageBrowserUITests.sqlite-shm",
+                "Fixtures/corrupted/ImageBrowserUITests.sqlite-wal",
+                "Fixtures/slideshow/ImageBrowserUITests.sqlite",
+                "Fixtures/slideshow/ImageBrowserUITests.sqlite-shm",
+                "Fixtures/slideshow/ImageBrowserUITests.sqlite-wal"
+            ],
             resources: [
                 .process("Fixtures")
             ]
