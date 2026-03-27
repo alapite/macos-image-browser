@@ -1294,7 +1294,9 @@ class AppState: ObservableObject {
 
     private func normalizeCustomOrderKeys(_ order: [String], using images: [ImageFile]) -> [String] {
         guard !order.isEmpty else { return [] }
-        guard order.contains(where: isLegacyCustomOrderKey) else { return order }
+        guard order.contains(where: { key in
+            isLegacyCustomOrderKey(key)
+        }) else { return order }
 
         var keysByName: [String: [String]] = [:]
         for image in images {
@@ -1388,7 +1390,7 @@ class AppState: ObservableObject {
             sortOrder: sortOrder,
             isShuffleEnabled: isShuffleEnabled,
             canReshuffle: isShuffleEnabled && hasEligibleImages,
-            openFolder: { [weak self] in
+            openFolder: {
                 // Folder opening handled by caller
             },
             toggleFilters: toggleFilters,
