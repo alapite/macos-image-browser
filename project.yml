@@ -21,7 +21,7 @@ settings:
 packages:
   GRDB.swift:
     url: https://github.com/groue/GRDB.swift.git
-    from: 7.10.0
+    version: 7.8.0
 
 targets:
   ImageBrowser:
