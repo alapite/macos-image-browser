@@ -12,8 +12,6 @@ final class ContextMenuExclusionTests: XCTestCase {
     private var appState: AppState!
 
     override func setUp() async throws {
-        try await super.setUp()
-
         let dbPath = NSTemporaryDirectory() + "context_menu_exclusion_\(UUID().uuidString).db"
         dbPool = try DatabasePool(path: dbPath)
         try await createSchema()
@@ -38,7 +36,6 @@ final class ContextMenuExclusionTests: XCTestCase {
         filterStore = nil
         tagStore = nil
         dbPool = nil
-        try await super.tearDown()
     }
 
     func testContextMenuExclude_persistsExcludedStateForResolvedTargets() async throws {

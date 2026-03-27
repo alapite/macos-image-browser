@@ -7,13 +7,11 @@ final class FilterStoreTests: XCTestCase {
     var filterStore: FilterStore!
 
     override func setUp() async throws {
-        try await super.setUp()
         filterStore = FilterStore()
     }
 
     override func tearDown() async throws {
         filterStore = nil
-        try await super.tearDown()
     }
 
     // MARK: - File Size Filter Tests

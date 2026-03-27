@@ -13,8 +13,6 @@ final class GalleryStoreTests: XCTestCase {
     private var dbPool: DatabasePool!
 
     override func setUp() async throws {
-        try await super.setUp()
-
         let dbPath = NSTemporaryDirectory() + "gallery_store_test_\(UUID().uuidString).db"
         dbPool = try DatabasePool(path: dbPath)
         try await dbPool.write { db in
@@ -75,7 +73,6 @@ final class GalleryStoreTests: XCTestCase {
         filterStore = nil
         appState = nil
         dbPool = nil
-        try await super.tearDown()
     }
 
     func testSnapshot_usesAppStateImagesAndMergesMetadata() async {

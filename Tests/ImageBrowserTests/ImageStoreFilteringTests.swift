@@ -9,8 +9,6 @@ final class ImageStoreFilteringTests: XCTestCase {
     var filterStore: FilterStore!
 
     override func setUp() async throws {
-        try await super.setUp()
-
         // Create a temporary database for testing
         let tempDir = FileManager.default.temporaryDirectory
         let dbPath = tempDir.appendingPathComponent("test_\(UUID().uuidString).db")
@@ -29,7 +27,6 @@ final class ImageStoreFilteringTests: XCTestCase {
     override func tearDown() async throws {
         imageStore = nil
         filterStore = nil
-        try await super.tearDown()
     }
 
     // MARK: - No Filter Tests

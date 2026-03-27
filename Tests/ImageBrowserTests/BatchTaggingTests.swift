@@ -19,8 +19,6 @@ final class BatchTaggingTests: XCTestCase {
     private var tagStore: TagStore!
 
     override func setUp() async throws {
-        try await super.setUp()
-
         let dbPath = NSTemporaryDirectory() + "batch_tagging_\(UUID().uuidString).db"
         dbPool = try DatabasePool(path: dbPath)
         try await createSchema()
@@ -30,7 +28,6 @@ final class BatchTaggingTests: XCTestCase {
     override func tearDown() async throws {
         tagStore = nil
         dbPool = nil
-        try await super.tearDown()
     }
 
     // MARK: - Test: Existing Tag to Multiple Images

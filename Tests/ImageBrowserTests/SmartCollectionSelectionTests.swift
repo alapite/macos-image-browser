@@ -20,8 +20,6 @@ final class SmartCollectionSelectionTests: XCTestCase {
     private var collectionStore: CollectionStore!
 
     override func setUp() async throws {
-        try await super.setUp()
-
         let dbPath = NSTemporaryDirectory() + "smart_collection_selection_test_\(UUID().uuidString).db"
         dbPool = try DatabasePool(path: dbPath)
         try await createSchema()
@@ -42,7 +40,6 @@ final class SmartCollectionSelectionTests: XCTestCase {
         imageStore = nil
         filterStore = nil
         dbPool = nil
-        try await super.tearDown()
     }
 
     // MARK: - Test: First Click Applies Collection

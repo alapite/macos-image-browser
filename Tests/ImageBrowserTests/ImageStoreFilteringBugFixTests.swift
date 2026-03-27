@@ -13,8 +13,6 @@ final class ImageStoreFilteringBugFixTests: XCTestCase {
     var dbPool: DatabasePool!
 
     override func setUp() async throws {
-        try await super.setUp()
-
         // Create an in-memory database for testing
         let dbPath = NSTemporaryDirectory() + "test_\(UUID().uuidString).db"
         dbPool = try DatabasePool(path: dbPath)
@@ -27,7 +25,6 @@ final class ImageStoreFilteringBugFixTests: XCTestCase {
         imageStore = nil
         filterStore = nil
         dbPool = nil
-        try await super.tearDown()
     }
 
     // MARK: - Filtering Behavior

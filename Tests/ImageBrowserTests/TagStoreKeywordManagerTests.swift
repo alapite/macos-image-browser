@@ -8,8 +8,6 @@ final class TagStoreKeywordManagerTests: XCTestCase {
     private var tagStore: TagStore!
 
     override func setUp() async throws {
-        try await super.setUp()
-
         let dbPath = NSTemporaryDirectory() + "tag_store_keyword_manager_\(UUID().uuidString).db"
         dbPool = try DatabasePool(path: dbPath)
         try await createSchema()
@@ -19,7 +17,6 @@ final class TagStoreKeywordManagerTests: XCTestCase {
     override func tearDown() async throws {
         tagStore = nil
         dbPool = nil
-        try await super.tearDown()
     }
 
     func testRenameTagPreservesImageAssociations() async throws {

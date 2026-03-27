@@ -17,8 +17,6 @@ final class ContextMenuTagEditorTests: XCTestCase {
     private var appState: AppState!
 
     override func setUp() async throws {
-        try await super.setUp()
-
         let dbPath = NSTemporaryDirectory() + "context_menu_editor_\(UUID().uuidString).db"
         dbPool = try DatabasePool(path: dbPath)
         try await createSchema()
@@ -43,7 +41,6 @@ final class ContextMenuTagEditorTests: XCTestCase {
         filterStore = nil
         tagStore = nil
         dbPool = nil
-        try await super.tearDown()
     }
 
     // MARK: - Test: Single Image Context Menu Flow

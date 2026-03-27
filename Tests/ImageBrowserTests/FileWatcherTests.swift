@@ -14,14 +14,12 @@ final class FileWatcherTests: XCTestCase {
     var fileSystem: LocalFileSystem!
 
     override func setUp() async throws {
-        try await super.setUp()
         tempDirectory = makeTempDirectory()
         fileSystem = LocalFileSystem()
     }
 
     override func tearDown() async throws {
         try? FileManager.default.removeItem(at: tempDirectory)
-        try await super.tearDown()
     }
 
     func testFileWatcherDetectsNewImageFiles() async throws {

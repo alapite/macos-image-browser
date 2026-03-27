@@ -17,8 +17,6 @@ final class KeyboardNavigationSynchronizationTests: XCTestCase {
     var dbPool: DatabasePool!
 
     override func setUp() async throws {
-        try await super.setUp()
-
         // Create a temporary database for testing
         let tempDir = FileManager.default.temporaryDirectory
         let dbPath = tempDir.appendingPathComponent("test_sync_\(UUID().uuidString).db")
@@ -130,7 +128,6 @@ final class KeyboardNavigationSynchronizationTests: XCTestCase {
         tagStore = nil
         collectionStore = nil
         dbPool = nil
-        try await super.tearDown()
     }
 
     private func createTestImage(name: String, rating: Int, isFavorite: Bool, creationDate: Date? = nil) -> ImageFile {

@@ -7,13 +7,11 @@ final class ViewStoreZoomTests: XCTestCase {
     var viewStore: ViewStore!
 
     override func setUp() async throws {
-        try await super.setUp()
         viewStore = ViewStore()
     }
 
     override func tearDown() async throws {
         viewStore = nil
-        try await super.tearDown()
     }
 
     // MARK: - Zoom Preset Tests

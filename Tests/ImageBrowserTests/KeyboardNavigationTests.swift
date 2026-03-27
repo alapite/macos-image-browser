@@ -15,8 +15,6 @@ final class KeyboardNavigationTests: XCTestCase {
     var dbPool: DatabasePool!
 
     override func setUp() async throws {
-        try await super.setUp()
-
         // Create a temporary database for testing
         let tempDir = FileManager.default.temporaryDirectory
         let dbPath = tempDir.appendingPathComponent("test_keyboard_nav_\(UUID().uuidString).db")
@@ -129,7 +127,6 @@ final class KeyboardNavigationTests: XCTestCase {
         tagStore = nil
         collectionStore = nil
         dbPool = nil
-        try await super.tearDown()
     }
 
     // Helper to create test images

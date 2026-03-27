@@ -8,7 +8,6 @@ final class AppStateTests: XCTestCase {
     var preferencesStore: InMemoryPreferencesStore!
 
     override func setUp() async throws {
-        try await super.setUp()
         await MainActor.run {
             preferencesStore = InMemoryPreferencesStore()
             sut = makeAppState(preferencesStore: preferencesStore)
@@ -20,7 +19,6 @@ final class AppStateTests: XCTestCase {
             sut = nil
             preferencesStore = nil
         }
-        try await super.tearDown()
     }
 
     // MARK: - Helper Methods
@@ -1055,7 +1053,7 @@ final class AppStateTests: XCTestCase {
         var appState: AppState? = makeAppState(preferencesStore: preferencesStore, downsamplingPipeline: pipeline)
         appState?.images = createNamedImages(names: ["0.jpg", "1.jpg", "2.jpg", "3.jpg", "4.jpg"])
 
-        weak let weakAppState = appState
+        weak var weakAppState = appState
         let initialNeighborURL = appState!.images[1].url
         let staleNeighborURL = appState!.images[3].url
 

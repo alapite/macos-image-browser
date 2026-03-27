@@ -9,14 +9,12 @@ final class LiveReloadingIntegrationTests: XCTestCase {
     var appState: AppState!
 
     override func setUp() async throws {
-        try await super.setUp()
         tempDirectory = makeTempDirectory()
         appState = makeAppState()
     }
 
     override func tearDown() async throws {
         try? FileManager.default.removeItem(at: tempDirectory)
-        try await super.tearDown()
     }
 
     func testNewImagesAreAddedToGalleryAutomatically() async throws {

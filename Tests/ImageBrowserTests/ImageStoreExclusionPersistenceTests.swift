@@ -7,13 +7,11 @@ final class ImageStoreExclusionPersistenceTests: XCTestCase {
     private var filterStore: FilterStore!
 
     override func setUp() async throws {
-        try await super.setUp()
         filterStore = FilterStore()
     }
 
     override func tearDown() async throws {
         filterStore = nil
-        try await super.tearDown()
     }
 
     func testImageMetadataRecord_roundTripsExcludedFields() throws {

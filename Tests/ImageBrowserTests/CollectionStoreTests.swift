@@ -10,8 +10,6 @@ final class CollectionStoreTests: XCTestCase {
     private var collectionStore: CollectionStore!
 
     override func setUp() async throws {
-        try await super.setUp()
-
         let dbPath = NSTemporaryDirectory() + "collection_store_test_\(UUID().uuidString).db"
         dbPool = try DatabasePool(path: dbPath)
         try await createSchema()
@@ -31,7 +29,6 @@ final class CollectionStoreTests: XCTestCase {
         appState = nil
         imageStore = nil
         dbPool = nil
-        try await super.tearDown()
     }
 
     func testMalformedRowDoesNotHideValidCollections() async throws {

@@ -8,7 +8,6 @@ final class AppCommandsTests: XCTestCase {
     var preferencesStore: InMemoryPreferencesStore!
 
     override func setUp() async throws {
-        try await super.setUp()
         await MainActor.run {
             preferencesStore = InMemoryPreferencesStore()
             sut = makeAppState(preferencesStore: preferencesStore)
@@ -20,7 +19,6 @@ final class AppCommandsTests: XCTestCase {
             sut = nil
             preferencesStore = nil
         }
-        try await super.tearDown()
     }
 
     // MARK: - Helper Methods

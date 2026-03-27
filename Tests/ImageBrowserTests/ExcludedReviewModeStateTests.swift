@@ -9,7 +9,6 @@ final class ExcludedReviewModeStateTests: XCTestCase {
     var cancellables: Set<AnyCancellable>!
 
     override func setUp() async throws {
-        try await super.setUp()
         await MainActor.run {
             preferencesStore = InMemoryPreferencesStore()
             sut = makeAppState(preferencesStore: preferencesStore)
@@ -23,7 +22,6 @@ final class ExcludedReviewModeStateTests: XCTestCase {
             preferencesStore = nil
             cancellables = nil
         }
-        try await super.tearDown()
     }
 
     // MARK: - Enter/Exit Review Mode
