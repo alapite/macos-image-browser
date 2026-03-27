@@ -19,9 +19,11 @@ source_package_checkouts_dir="${source_packages_dir}/checkouts"
 
 mkdir -p "${workspace_swiftpm_dir}"
 
-if [ -f "${root_package_resolved}" ] && [ ! -f "${workspace_package_resolved}" ]; then
-    cp "${root_package_resolved}" "${workspace_package_resolved}"
-    echo "Seeded Xcode workspace Package.resolved from root Package.resolved"
+if [ -f "${root_package_resolved}" ]; then
+    if [ ! -f "${workspace_package_resolved}" ] || ! cmp -s "${root_package_resolved}" "${workspace_package_resolved}"; then
+        cp "${root_package_resolved}" "${workspace_package_resolved}"
+        echo "Synchronized Xcode workspace Package.resolved from root Package.resolved"
+    fi
 fi
 
 if [ -f "${workspace_package_resolved}" ]; then

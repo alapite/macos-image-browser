@@ -59,6 +59,51 @@ EOF
     assert_equals "1" "$(printf '%s\n' "${output}" | tail -n 1)"
 }
 
+test_replaces_stale_workspace_package_resolved_from_root() {
+    local workspace="${TEST_ROOT}/stale-workspace"
+    local xcodeproj="ImageBrowser.xcodeproj"
+    local workspace_package_resolved="${workspace}/${xcodeproj}/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+    mkdir -p "$(dirname "${workspace_package_resolved}")"
+    cat > "${workspace}/Package.resolved" <<'EOF'
+{
+  "pins" : [
+    {
+      "identity" : "grdb.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/groue/GRDB.swift.git",
+      "state" : {
+        "revision" : "root",
+        "version" : "7.8.0"
+      }
+    }
+  ],
+  "version" : 2
+}
+EOF
+    cat > "${workspace_package_resolved}" <<'EOF'
+{
+  "pins" : [
+    {
+      "identity" : "grdb.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/groue/GRDB.swift.git",
+      "state" : {
+        "revision" : "stale",
+        "version" : "7.10.0"
+      }
+    }
+  ],
+  "version" : 2
+}
+EOF
+
+    local output
+    output="$("${PROJECT_ROOT}/scripts/prepare-xcode-package-resolution.sh" "${workspace}" "${xcodeproj}")"
+
+    assert_equals "0" "$(printf '%s\n' "${output}" | tail -n 1)"
+    assert_equals "$(cat "${workspace}/Package.resolved")" "$(cat "${workspace_package_resolved}")"
+}
+
 test_allows_automatic_resolution_without_lockfile() {
     local workspace="${TEST_ROOT}/unseeded"
     local xcodeproj="ImageBrowser.xcodeproj"
@@ -72,6 +117,7 @@ test_allows_automatic_resolution_without_lockfile() {
 
 test_seeds_workspace_package_resolved_from_root
 test_disables_automatic_resolution_when_package_cache_exists
+test_replaces_stale_workspace_package_resolved_from_root
 test_allows_automatic_resolution_without_lockfile
 
 echo "prepare-xcode-package-resolution-tests.sh: PASS"

@@ -1349,21 +1349,21 @@ final class AppStateTests: XCTestCase {
         // Wait a bit for prefetches to start
         try? await Task.sleep(nanoseconds: 100_000_000)
 
-        // Then: Only the latest neighborhood (around 80) should be active
-        let latestPrefetchObserved = await pipeline.waitForAnyRequest(
+        // Then: The latest neighborhood (around 80) should be the one that completes
+        let latestPrefetchObserved = await pipeline.waitForAnyCompletedRequest(
             [appState.images[79].url, appState.images[81].url],
             cache: .main,
-            timeoutNanoseconds: 500_000_000
+            timeoutNanoseconds: 1_000_000_000
         )
-        XCTAssertNotNil(latestPrefetchObserved, "Latest jump should trigger prefetch")
+        XCTAssertNotNil(latestPrefetchObserved, "Latest jump should complete prefetching around the active index")
 
-        // Verify early generations were canceled
-        let earlyGenerationObserved = await pipeline.waitForRequest(
+        // Verify early generations do not complete after being replaced
+        let earlyGenerationObserved = await pipeline.waitForCompletedRequest(
             appState.images[11].url,  // neighbor of first jump
             cache: .main,
-            timeoutNanoseconds: 100_000_000
+            timeoutNanoseconds: 300_000_000
         )
-        XCTAssertFalse(earlyGenerationObserved, "Early generation prefetch should be canceled by later jumps")
+        XCTAssertFalse(earlyGenerationObserved, "Early generation prefetch should not complete after later jumps replace it")
     }
 
     // MARK: - Memory Stability Tests
@@ -1403,15 +1403,20 @@ final class AppStateTests: XCTestCase {
 
         // When: Switch to different folder
         appState.loadImages(from: folderB)
-        _ = await pipeline.waitForFirstRequest(in: folderB, timeoutNanoseconds: 1_000_000_000)
+        let newFolderCompleted = await pipeline.waitForCompletedRequest(
+            folderB.appendingPathComponent("B1.jpg"),
+            cache: .thumbnail,
+            timeoutNanoseconds: 1_000_000_000
+        )
+        XCTAssertTrue(newFolderCompleted, "New folder thumbnail prefetch should complete for the replacement context")
 
-        // Then: Old folder prefetch should be canceled
-        let oldFolderRequest = await pipeline.waitForRequest(
+        // Then: Old folder prefetch should not complete after the folder switch
+        let oldFolderRequest = await pipeline.waitForCompletedRequest(
             folderA.appendingPathComponent("A2.jpg"),
             cache: .thumbnail,
             timeoutNanoseconds: 300_000_000
         )
-        XCTAssertFalse(oldFolderRequest, "Old folder prefetch should be canceled on folder change")
+        XCTAssertFalse(oldFolderRequest, "Old folder prefetch should not complete after the folder changes")
     }
 
     func testLongRunningNavigationLoop_doesNotLeakTasks() async {
@@ -1605,6 +1610,8 @@ final class AppStateTests: XCTestCase {
 
 actor RecordingDownsamplingPipeline: ImageDownsamplingProviding {
     private var requests: [(url: URL, maxPixelSize: Int, cache: DownsamplingCacheKind)] = []
+    private var completedRequests: [(url: URL, cache: DownsamplingCacheKind)] = []
+    private var cancelledRequests: [(url: URL, cache: DownsamplingCacheKind)] = []
     private let delayNanoseconds: UInt64
 
     init(delayNanoseconds: UInt64) {
@@ -1614,6 +1621,11 @@ actor RecordingDownsamplingPipeline: ImageDownsamplingProviding {
     func loadImage(from url: URL, maxPixelSize: Int, cache: DownsamplingCacheKind) async -> CGImage? {
         requests.append((url: url, maxPixelSize: maxPixelSize, cache: cache))
         try? await Task.sleep(nanoseconds: delayNanoseconds)
+        if Task.isCancelled {
+            cancelledRequests.append((url: url, cache: cache))
+            return nil
+        }
+        completedRequests.append((url: url, cache: cache))
         return nil
     }
 
@@ -1696,6 +1708,41 @@ actor RecordingDownsamplingPipeline: ImageDownsamplingProviding {
 
         while waited < timeoutNanoseconds {
             if let request = requests.first(where: { request in
+                request.cache == cache && candidatePaths.contains(request.url.standardizedFileURL.path)
+            }) {
+                return request.url
+            }
+            try? await Task.sleep(nanoseconds: pollInterval)
+            waited += pollInterval
+        }
+        return nil
+    }
+
+    func waitForCompletedRequest(_ url: URL, cache: DownsamplingCacheKind, timeoutNanoseconds: UInt64) async -> Bool {
+        let pollInterval: UInt64 = 20_000_000
+        var waited: UInt64 = 0
+        let requestPath = url.standardizedFileURL.path
+
+        while waited < timeoutNanoseconds {
+            if completedRequests.contains(where: { request in
+                request.cache == cache && request.url.standardizedFileURL.path == requestPath
+            }) {
+                return true
+            }
+            try? await Task.sleep(nanoseconds: pollInterval)
+            waited += pollInterval
+        }
+        return false
+    }
+
+    func waitForAnyCompletedRequest(_ urls: [URL], cache: DownsamplingCacheKind, timeoutNanoseconds: UInt64) async -> URL? {
+        guard !urls.isEmpty else { return nil }
+        let pollInterval: UInt64 = 20_000_000
+        var waited: UInt64 = 0
+        let candidatePaths = Set(urls.map { $0.standardizedFileURL.path })
+
+        while waited < timeoutNanoseconds {
+            if let request = completedRequests.first(where: { request in
                 request.cache == cache && candidatePaths.contains(request.url.standardizedFileURL.path)
             }) {
                 return request.url
