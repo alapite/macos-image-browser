@@ -17,7 +17,7 @@ If any of these files are added later, agents should treat them as higher-priori
 
 - macOS 13+
 - Xcode installed (for SDKs, `xcodebuild`, XCTest runtime)
-- Swift 5.9 toolchain (as declared in `Package.swift`)
+- Swift 6.2 toolchain (as declared in `Package.swift`)
 - Homebrew recommended (`build.sh` installs XcodeGen if missing)
 
 ## Build and Run Commands
